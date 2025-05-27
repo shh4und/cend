@@ -3,7 +3,7 @@ from scipy import ndimage as ndi
 from scipy import linalg
 import logging
 import time
-import matplotlib.pyplot as plt # Mantido para uso potencial do usuário
+import matplotlib.pyplot as plt 
 from skimage.util import img_as_float
 
 class VesselCenterlineExtractor:
@@ -148,7 +148,7 @@ class VesselCenterlineExtractor:
             return None, None
 
         try:
-            eigenvalues, eigenvectors = linalg.eigh(hessian_matrix)
+            eigenvalues, eigenvectors = linalg.eigh(hessian_matrix, check_finite=False)
         except linalg.LinAlgError as e:
             self.logger.warning(f"Decomposição de autovalores falhou para o ponto {point}, sigma {sigma}: {e}")
             return None, None
@@ -257,7 +257,7 @@ class VesselCenterlineExtractor:
         
         return max_response_point
 
-    def extract_centerline(self, seed_point, max_steps=1000):
+    def extract_centerline(self, seed_point, max_steps=1000, at_step_log=100):
         """
         Extrai a linha central do vaso a partir de um ponto semente.
         Segue o método CEVD (Centerline Extraction using Vessel Direction).
@@ -358,7 +358,7 @@ class VesselCenterlineExtractor:
             current_C = next_C
             self.logger.debug(f"Novo ponto da linha central Ck+1: {current_C}")
 
-            if step_num % 10 == 0 and step_num > 0: # Log a cada 10 passos
+            if step_num % at_step_log == 0 and step_num > 0: # Log a cada n passos
                  self.logger.info(f"No passo: {step_num}, próximo_C: {next_C}, cache_size: {len(self.eigenvalue_cache)}")
 
             if step_num == max_steps - 1:
@@ -377,7 +377,6 @@ class VesselCenterlineExtractor:
         shape = self.volume.shape
         return 0 <= z < shape[0] and 0 <= y < shape[1] and 0 <= x < shape[2]
 
-    # --- Métodos a serem refatorados/implementados posteriormente pelo usuário ---
     def detect_bifurcations(self, point, v2, v3, search_radius=None):
         self.logger.warning("detect_bifurcations ainda não está implementado nesta versão refatorada.")
         return [] 
