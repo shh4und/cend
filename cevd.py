@@ -46,7 +46,7 @@ class VesselCenterlineExtractor:
         self.vessel_threshold = vessel_threshold
         self.search_radius = search_radius
         self.local_hessian_radius_factor = local_hessian_radius_factor
-
+        self.all_tree_points = set()
         # Estrutura de Cache
         self.eigenvalue_cache = {}
 
@@ -377,11 +377,166 @@ class VesselCenterlineExtractor:
         shape = self.volume.shape
         return 0 <= z < shape[0] and 0 <= y < shape[1] and 0 <= x < shape[2]
 
-    def detect_bifurcations(self, point, v2, v3, search_radius=None):
-        self.logger.warning("detect_bifurcations ainda não está implementado nesta versão refatorada.")
-        return [] 
+    def detect_bifurcations(self, point, v2, v3, sigma=None, max_response=None, radius=None):
+        """
+        Detect bifurcations by looking for multiple peaks in the cross-section.
+        
+        Parameters:
+        -----------
+        point : tuple
+            Current point coordinates (z, y, x)
+        v2, v3 : ndarray
+            Eigenvectors that define the cross-section plane
+        search_radius : int, optional
+            Radius to search for peaks (defaults to self.search_radius)
+            
+        Returns:
+        --------
+        peak_points : list
+            List of detected peak points in the cross-section
+        """
+        
+        # Normalize vectors with respect to physical spacing
+        point = np.array(point)
+        v2 = v2 / np.linalg.norm(v2)
+        v3 = v3 / np.linalg.norm(v3)
+        
+        if radius is None:
+            radius = np.round(self.search_radius*1.5).astype(int)
+        # Get best scale for this point
+        if sigma is None or max_response is None:
+            max_response, sigma = self.get_multiscale_response(tuple(point))
+        
+        # Create a grid of responses in the cross-section plane
+        responses = np.zeros((2*radius+1, 2*radius+1))
+        grid_to_world = {}
+        
+        for i in range(-radius, radius + 1):
+            for j in range(-radius, radius + 1):
+                # Linear combination of v2 and v3 to get a point in the plane
+                offset = i * v2 + j * v3
+                grid_point = np.round(point + offset).astype(int)
+                
+                grid_i, grid_j = i + radius, j + radius
+                
+                # Check if point is within volume bounds
+                if self.is_inside_volume(grid_point):
+                    # Compute MVEF response at this point
+                    response = self.mvef_response(tuple(grid_point), sigma)
+                    responses[grid_i, grid_j] = response
+                    grid_to_world[(grid_i, grid_j)] = tuple(grid_point)
+        
+        # Find local maxima in the response grid
+        peak_points = []
+        threshold = max_response*0.66
+        #responses_smoothed = ndi.gaussian_filter(responses, sigma=0.5)
 
-    def extract_vessel_tree(self, seed_point, max_branches=10, branch_length_limit=100, check_interval=10):
-        self.logger.warning("extract_vessel_tree ainda não está implementado nesta versão refatorada.")
-        main_branch = self.extract_centerline(seed_point, max_steps=branch_length_limit)
-        return {0: {"centerline": main_branch, "parent": None}} if main_branch else {}
+        # Simple peak detection - check all 8 neighbors
+        for i in range(1, 2*radius):
+            for j in range(1, 2*radius):
+                is_peak = (responses[i, j] > threshold)
+                for ni in [-1, 0, 1]:
+                    for nj in [-1, 0, 1]:
+                        if ni == 0 and nj == 0:
+                            continue
+                        is_peak = is_peak and (responses[i, j] > responses[i+ni, j+nj])
+                
+                if is_peak and (i, j) in grid_to_world:
+            
+                    peak_points.append(grid_to_world[(i, j)])
+        
+        self.logger.debug(f" Found {len(peak_points)} peaks in cross-section at {point}")
+        return peak_points
+
+
+
+    def extract_vessel_tree(self, seed_point, max_branches=20, max_branch_length_limit=100, min_branch_length_limit=5, check_interval=5):
+        """
+        Extract the complete vessel tree including bifurcations.
+        
+        Parameters:
+        -----------
+        seed_point : tuple
+            Initial point coordinates (z, y, x) inside the vessel
+        max_branches : int
+            Maximum number of branches to extract
+        max_branch_length_limit : int
+            Maximum steps per branch
+        check_interval : int
+            Interval of points to check for bifurcations
+            
+        Returns:
+        --------
+        vessel_tree : dict
+            Dictionary of centerlines with branch IDs as keys
+        """
+        self.logger.info(f" Extracting vessel tree from seed point {seed_point}")
+        start_time = time.time()
+        
+        # Queue of seed points to process (point, parent_branch_id)
+        seed_queue = [(seed_point, None)]
+        vessel_tree = {}
+        branch_id = 0
+        
+        # Process queue until empty or max_branches reached
+        while seed_queue and branch_id < max_branches:
+            current_seed, parent_id = seed_queue.pop(0)
+            self.logger.info(f" Processing branch {branch_id}, seed: {current_seed}, parent: {parent_id}")
+            
+            if branch_id == 0:
+                centerline = self.extract_centerline(current_seed, max_steps=500)  
+                self.all_tree_points.update(centerline)  
+            # Extract centerline from this seed
+            else:
+                centerline = self.extract_centerline(current_seed, max_steps=max_branch_length_limit)
+            
+            if len(centerline) >= min_branch_length_limit:  # Ensure we found a valid centerline
+                vessel_tree[branch_id] = {
+                    'centerline': centerline,
+                    'parent': parent_id
+                }
+                self.all_tree_points.update(centerline)
+                # Sample points along centerline to check for bifurcations
+                check_points = [centerline[i] for i in range(0, len(centerline), check_interval)]
+                self.logger.info(f" Branch {branch_id}: checking {len(check_points)} points for bifurcations")
+                
+                # For each sampled point, check for bifurcations
+                for point in check_points:
+                    # Get direction and cross-section vectors
+                    max_response, sigma = self.get_multiscale_response(point)
+                    _, eigenvectors = self.compute_eigenvalues(point, sigma)
+                    v2, v3 = eigenvectors[:, 1], eigenvectors[:, 2]
+                    
+                    # Detect peaks in cross-section
+                    peaks = self.detect_bifurcations(point, v2, v3, sigma, max_response)
+                    
+                    # If multiple peaks found, add new seeds
+                    if len(peaks) > 1:
+                        self.logger.info(f" Bifurcation detected at {point} with {len(peaks)} peaks")
+                        
+                        """ # Visualize the first few bifurcations
+                        if branch_id < 3:  # Just visualize first few branches
+                            fig, _ = self.visualize_bifurcation_response(
+                                point, 
+                                save_path=f"./graphs/bifurcation_branch{branch_id}_point{[int(p) for p in point]}.png",
+                                plot_3d=True
+                            )
+                            plt.close(fig)  # Close to free memory """
+                        for peak in peaks:
+                            # Skip peaks too close to any tree point
+                            if not any(np.linalg.norm(np.array(peak) - np.array(p)) < self.step_size*0.9 for p in self.all_tree_points):
+                                self.logger.info(f" Adding new seed at {peak} from branch {branch_id}")
+                                seed_queue.append((peak, branch_id))
+                
+                branch_id += 1
+                self.logger.info(f" Completed branch {branch_id-1} with {len(centerline)} points")
+            else:
+                self.logger.info(f" Failed to extract centerline from seed {current_seed}")
+        
+        end_time = time.time()
+        self.logger.info(f" Vessel tree extraction complete: {branch_id} branches, {(end_time - start_time):.2f}s")
+        
+        # Clear caches to free memory after extraction
+        #self.clear_caches()
+        
+        return vessel_tree
