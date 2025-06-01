@@ -5,6 +5,7 @@ import logging
 import time
 import matplotlib.pyplot as plt 
 from skimage.util import img_as_float
+from skimage.feature import peak_local_max
 
 class VesselCenterlineExtractor:
     def __init__(
@@ -222,8 +223,85 @@ class VesselCenterlineExtractor:
         best_scale = self.sigmas[best_scale_idx]
 
         return max_response, best_scale
+    
+    
 
-    def find_center_in_cross_section(self, center_of_cs_plane, v2, v3):
+    def _find_multiple_peaks_in_cs(self, cs_center_point, v2_cs, v3_cs, sigma_at_cs,
+                                     min_peak_dist_factor=0.5, peak_response_thresh_factor=0.75):
+        Pc_arr = np.array(cs_center_point)
+        v2_norm = v2_cs / (np.linalg.norm(v2_cs) + 1e-10)
+        v3_norm = v3_cs / (np.linalg.norm(v3_cs) + 1e-10)
+
+        grid_size = 2 * self.search_radius + 1
+        response_grid = np.full((grid_size, grid_size), -np.inf)
+        point_map = {} 
+        max_grid_response = -np.inf
+
+        for i_grid, i_offset in enumerate(range(-self.search_radius, self.search_radius + 1)):
+            for j_grid, j_offset in enumerate(range(-self.search_radius, self.search_radius + 1)):
+                cs_point_float = Pc_arr + i_offset * v2_norm + j_offset * v3_norm
+                cs_point_int = tuple(np.round(cs_point_float).astype(int))
+                
+                if not self.is_inside_volume(cs_point_int):
+                    continue
+
+                response = self.mvef_response(cs_point_int, sigma_at_cs)
+                response_grid[i_grid, j_grid] = response
+                point_map[(i_grid, j_grid)] = cs_point_int
+                if response > max_grid_response:
+                    max_grid_response = response
+        
+        if max_grid_response < self.vessel_threshold:
+            return []
+
+        threshold_abs = max(self.vessel_threshold * 1.15, max_grid_response * peak_response_thresh_factor)
+        min_distance_pixels = max(1, int(self.search_radius * min_peak_dist_factor))
+        
+        peak_coords_in_grid = peak_local_max(response_grid, 
+                                             min_distance=min_distance_pixels, 
+                                             threshold_abs=threshold_abs, 
+                                             exclude_border=False)
+
+        detected_peaks_info = []
+        for r_idx, c_idx in peak_coords_in_grid:
+            if (r_idx, c_idx) in point_map:
+                peak_3d = point_map[(r_idx, c_idx)]
+                response_at_peak = response_grid[r_idx, c_idx]
+                detected_peaks_info.append((peak_3d, response_at_peak))
+        
+        detected_peaks_info.sort(key=lambda x: x[1], reverse=True)
+        return detected_peaks_info
+
+
+    def find_center_in_cross_section(self, center_of_cs_plane_P, v2_cs, v3_cs, best_sigma_at_P=None, max_response_at_P=None, radius=None): # Ponto P, não C
+        """Encontra o único centro mais forte na seção transversal de P para obter C."""
+        Pc_arr = np.array(center_of_cs_plane_P)
+        
+        # A escala ótima é calculada no ponto P (center_of_cs_plane_P)
+        if best_sigma_at_P is None or max_response_at_P is None:
+            max_response_at_P, best_sigma_at_P = self.get_multiscale_response(tuple(np.round(Pc_arr).astype(int)))
+
+        # A busca pelos picos também usa esta sigma_at_P
+        # Usamos _find_multiple_peaks_in_cs para robustez, mas pegamos apenas o mais forte.
+        # Parâmetros de min_peak_dist e thresh_factor podem ser mais relaxados aqui,
+        # já que só queremos o global máximo na CS.
+        peaks_info = self._find_multiple_peaks_in_cs(tuple(np.round(Pc_arr).astype(int)), 
+                                                     v2_cs, v3_cs, best_sigma_at_P,
+                                                     min_peak_dist_factor=0.5, # Menos restritivo
+                                                     peak_response_thresh_factor=0.75) # Menos restritivo
+        if not peaks_info:
+            self.logger.debug(f"Nenhum centro encontrado (via _find_multiple_peaks) na seção transversal de {center_of_cs_plane_P}")
+            return None
+        
+        # O primeiro da lista é o mais forte (ordenado por resposta em _find_multiple_peaks_in_cs)
+        strongest_peak_3d = peaks_info[0][0]
+        
+        if len(peaks_info) > 1:
+            self.logger.debug(f"Múltiplos ({len(peaks_info)}) picos encontrados por find_center_in_cross_section para {center_of_cs_plane_P}. Retornando o mais forte: {strongest_peak_3d}")
+        
+        return strongest_peak_3d
+
+    def _find_center_in_cross_section(self, center_of_cs_plane, v2, v3, best_sigma_at_Pc=None, max_response_at_Pc=None, radius=None):
         """
         Encontra o ponto com a resposta MVEF máxima no plano da seção transversal.
         O plano da seção transversal é definido pelo ponto P_c e vetores v2, v3.
@@ -233,9 +311,10 @@ class VesselCenterlineExtractor:
         v2_norm = v2 / (np.linalg.norm(v2) + 1e-10)
         v3_norm = v3 / (np.linalg.norm(v3) + 1e-10)
 
-        _, best_sigma_at_Pc = self.get_multiscale_response(tuple(Pc))
+        if best_sigma_at_Pc is None or max_response_at_Pc is None:
+            max_response_at_Pc, best_sigma_at_Pc = self.get_multiscale_response(tuple(Pc))
 
-        max_response = -np.inf
+        max_response = max_response_at_Pc
         max_response_point = None
 
         for i in range(-self.search_radius, self.search_radius + 1):
@@ -286,7 +365,7 @@ class VesselCenterlineExtractor:
         
         v2_P0, v3_P0 = eigenvectors_P0[:, 1], eigenvectors_P0[:, 2]
 
-        current_C = self.find_center_in_cross_section(current_P, v2_P0, v3_P0)
+        current_C = self.find_center_in_cross_section(current_P, v2_P0, v3_P0, sigma_P0, response_P0)
 
         if current_C is None:
             self.logger.warning(f"Não foi possível encontrar o centro inicial C0 a partir da semente P0={current_P}. Usando P0 como C0.")
@@ -344,7 +423,7 @@ class VesselCenterlineExtractor:
             
             v2_Pk_plus_1, v3_Pk_plus_1 = eigenvectors_Pk_plus_1[:, 1], eigenvectors_Pk_plus_1[:, 2]
 
-            next_C = self.find_center_in_cross_section(next_P, v2_Pk_plus_1, v3_Pk_plus_1) 
+            next_C = self.find_center_in_cross_section(next_P, v2_Pk_plus_1, v3_Pk_plus_1, sigma_Pk_plus_1, response_Pk_plus_1) 
 
             if next_C is None:
                 self.logger.info(f"Não foi possível encontrar o centro Ck+1 a partir de Pk+1={next_P}. Terminando.")
