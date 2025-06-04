@@ -273,35 +273,35 @@ class VesselCenterlineExtractor:
         return detected_peaks_info
 
 
-    def find_center_in_cross_section(self, center_of_cs_plane_P, v2_cs, v3_cs, best_sigma_at_P=None, max_response_at_P=None, radius=None): # Ponto P, não C
-        """Encontra o único centro mais forte na seção transversal de P para obter C."""
-        Pc_arr = np.array(center_of_cs_plane_P)
+    # def find_center_in_cross_section(self, center_of_cs_plane_P, v2_cs, v3_cs, best_sigma_at_P=None, max_response_at_P=None, radius=None): # Ponto P, não C
+    #     """Encontra o único centro mais forte na seção transversal de P para obter C."""
+    #     Pc_arr = np.array(center_of_cs_plane_P)
         
-        # A escala ótima é calculada no ponto P (center_of_cs_plane_P)
-        if best_sigma_at_P is None or max_response_at_P is None:
-            max_response_at_P, best_sigma_at_P = self.get_multiscale_response(tuple(np.round(Pc_arr).astype(int)))
+    #     # A escala ótima é calculada no ponto P (center_of_cs_plane_P)
+    #     if best_sigma_at_P is None or max_response_at_P is None:
+    #         max_response_at_P, best_sigma_at_P = self.get_multiscale_response(tuple(np.round(Pc_arr).astype(int)))
 
-        # A busca pelos picos também usa esta sigma_at_P
-        # Usamos _find_multiple_peaks_in_cs para robustez, mas pegamos apenas o mais forte.
-        # Parâmetros de min_peak_dist e thresh_factor podem ser mais relaxados aqui,
-        # já que só queremos o global máximo na CS.
-        peaks_info = self._find_multiple_peaks_in_cs(tuple(np.round(Pc_arr).astype(int)), 
-                                                     v2_cs, v3_cs, best_sigma_at_P,
-                                                     min_peak_dist_factor=0.5, # Menos restritivo
-                                                     peak_response_thresh_factor=0.75) # Menos restritivo
-        if not peaks_info:
-            self.logger.debug(f"Nenhum centro encontrado (via _find_multiple_peaks) na seção transversal de {center_of_cs_plane_P}")
-            return None
+    #     # A busca pelos picos também usa esta sigma_at_P
+    #     # Usamos _find_multiple_peaks_in_cs para robustez, mas pegamos apenas o mais forte.
+    #     # Parâmetros de min_peak_dist e thresh_factor podem ser mais relaxados aqui,
+    #     # já que só queremos o global máximo na CS.
+    #     peaks_info = self._find_multiple_peaks_in_cs(tuple(np.round(Pc_arr).astype(int)), 
+    #                                                  v2_cs, v3_cs, best_sigma_at_P,
+    #                                                  min_peak_dist_factor=0.5, # Menos restritivo
+    #                                                  peak_response_thresh_factor=0.75) # Menos restritivo
+    #     if not peaks_info:
+    #         self.logger.debug(f"Nenhum centro encontrado (via _find_multiple_peaks) na seção transversal de {center_of_cs_plane_P}")
+    #         return None
         
-        # O primeiro da lista é o mais forte (ordenado por resposta em _find_multiple_peaks_in_cs)
-        strongest_peak_3d = peaks_info[0][0]
+    #     # O primeiro da lista é o mais forte (ordenado por resposta em _find_multiple_peaks_in_cs)
+    #     strongest_peak_3d = peaks_info[0][0]
         
-        if len(peaks_info) > 1:
-            self.logger.debug(f"Múltiplos ({len(peaks_info)}) picos encontrados por find_center_in_cross_section para {center_of_cs_plane_P}. Retornando o mais forte: {strongest_peak_3d}")
+    #     if len(peaks_info) > 1:
+    #         self.logger.debug(f"Múltiplos ({len(peaks_info)}) picos encontrados por find_center_in_cross_section para {center_of_cs_plane_P}. Retornando o mais forte: {strongest_peak_3d}")
         
-        return strongest_peak_3d
+    #     return strongest_peak_3d
 
-    def _find_center_in_cross_section(self, center_of_cs_plane, v2, v3, best_sigma_at_Pc=None, max_response_at_Pc=None, radius=None):
+    def find_center_in_cross_section(self, center_of_cs_plane, v2, v3, best_sigma_at_Pc=None, max_response_at_Pc=None, radius=None):
         """
         Encontra o ponto com a resposta MVEF máxima no plano da seção transversal.
         O plano da seção transversal é definido pelo ponto P_c e vetores v2, v3.
@@ -314,7 +314,7 @@ class VesselCenterlineExtractor:
         if best_sigma_at_Pc is None or max_response_at_Pc is None:
             max_response_at_Pc, best_sigma_at_Pc = self.get_multiscale_response(tuple(Pc))
 
-        max_response = max_response_at_Pc
+        max_response = -np.inf
         max_response_point = None
 
         for i in range(-self.search_radius, self.search_radius + 1):
