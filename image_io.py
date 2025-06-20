@@ -84,8 +84,6 @@ def simple_imshow(imgs):
         x += 1
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-    return True
-
 
 def slide_imshow(image_stack, multiple_windows=False):
     index = 0
@@ -93,17 +91,17 @@ def slide_imshow(image_stack, multiple_windows=False):
 
     if not multiple_windows:
         while True:
-            curr_window_name = f"image[{index}] | press X to quit"
+            curr_window_name = f"image[{index}] | press Q to quit"
 
             cv2.imshow(curr_window_name, image_stack[index])
             key = cv2.waitKey(0)
 
-            if key == ord("x"):  # Press 'x' to quit
+            if key == ord("q"):  # Press 'x' to quit
                 break
-            elif key == ord("e"):  # Press 'n' for next image
+            elif key == ord("d"):  # Press 'n' for next image
                 cv2.destroyWindow(curr_window_name)
                 index = (index + 1) % num_images
-            elif key == ord("q"):  # Press 'p' for previous image
+            elif key == ord("a"):  # Press 'p' for previous image
                 cv2.destroyWindow(curr_window_name)
                 index = (index - 1) % num_images
     else:
@@ -111,22 +109,22 @@ def slide_imshow(image_stack, multiple_windows=False):
             prev_index = (index - 1) % num_images
             next_index = (index + 1) % num_images
 
-            prev_window_name = f"image[{prev_index}] | press X to quit"
-            curr_window_name = f"image[{index}] | press X to quit"
-            next_window_name = f"image[{next_index}] | press X to quit"
+            prev_window_name = f"image[{prev_index}] | press Q to quit"
+            curr_window_name = f"image[{index}] | press Q to quit"
+            next_window_name = f"image[{next_index}] | press Q to quit"
             cv2.imshow(prev_window_name, image_stack[prev_index])
             cv2.imshow(curr_window_name, image_stack[index])
             cv2.imshow(next_window_name, image_stack[next_index])
             key = cv2.waitKey(0)
 
-            if key == ord("x"):  # Press 'x' to quit
+            if key == ord("q"):  # Press 'q' to quit
                 break
-            elif key == ord("e"):  # Press 'n' for next image
+            elif key == ord("d"):  # Press 'd' for next image
                 cv2.destroyWindow(prev_window_name)
                 cv2.destroyWindow(curr_window_name)
                 cv2.destroyWindow(next_window_name)
                 index = (index + 1) % num_images
-            elif key == ord("q"):  # Press 'p' for previous image
+            elif key == ord("a"):  # Press 'a' for previous image
                 cv2.destroyWindow(prev_window_name)
                 cv2.destroyWindow(curr_window_name)
                 cv2.destroyWindow(next_window_name)
