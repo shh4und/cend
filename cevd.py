@@ -185,7 +185,7 @@ class VesselCenterlineExtractor:
 
         term2_structure = (2.0/3.0) * lambda1 - lambda2 - lambda3 
 
-        S_squared = lambda1**2 + lambda2**2 + lambda3**2 
+        S_squared = np.sqrt(lambda1**2 + lambda2**2 + lambda3**2)
         
         c_const = c_factor * self.volume.max() 
         if c_const < epsilon: 
@@ -271,35 +271,6 @@ class VesselCenterlineExtractor:
         
         detected_peaks_info.sort(key=lambda x: x[1], reverse=True)
         return detected_peaks_info
-
-
-    # def find_center_in_cross_section(self, center_of_cs_plane_P, v2_cs, v3_cs, best_sigma_at_P=None, max_response_at_P=None, radius=None): # Ponto P, não C
-    #     """Encontra o único centro mais forte na seção transversal de P para obter C."""
-    #     Pc_arr = np.array(center_of_cs_plane_P)
-        
-    #     # A escala ótima é calculada no ponto P (center_of_cs_plane_P)
-    #     if best_sigma_at_P is None or max_response_at_P is None:
-    #         max_response_at_P, best_sigma_at_P = self.get_multiscale_response(tuple(np.round(Pc_arr).astype(int)))
-
-    #     # A busca pelos picos também usa esta sigma_at_P
-    #     # Usamos _find_multiple_peaks_in_cs para robustez, mas pegamos apenas o mais forte.
-    #     # Parâmetros de min_peak_dist e thresh_factor podem ser mais relaxados aqui,
-    #     # já que só queremos o global máximo na CS.
-    #     peaks_info = self._find_multiple_peaks_in_cs(tuple(np.round(Pc_arr).astype(int)), 
-    #                                                  v2_cs, v3_cs, best_sigma_at_P,
-    #                                                  min_peak_dist_factor=0.5, # Menos restritivo
-    #                                                  peak_response_thresh_factor=0.75) # Menos restritivo
-    #     if not peaks_info:
-    #         self.logger.debug(f"Nenhum centro encontrado (via _find_multiple_peaks) na seção transversal de {center_of_cs_plane_P}")
-    #         return None
-        
-    #     # O primeiro da lista é o mais forte (ordenado por resposta em _find_multiple_peaks_in_cs)
-    #     strongest_peak_3d = peaks_info[0][0]
-        
-    #     if len(peaks_info) > 1:
-    #         self.logger.debug(f"Múltiplos ({len(peaks_info)}) picos encontrados por find_center_in_cross_section para {center_of_cs_plane_P}. Retornando o mais forte: {strongest_peak_3d}")
-        
-    #     return strongest_peak_3d
 
     def find_center_in_cross_section(self, center_of_cs_plane, v2, v3, best_sigma_at_Pc=None, max_response_at_Pc=None, radius=None):
         """
@@ -508,17 +479,17 @@ class VesselCenterlineExtractor:
         # Find local maxima in the response grid
         peak_points = []
         threshold = max_response*0.66
-        #responses_smoothed = ndi.gaussian_filter(responses, sigma=0.5)
+        responses_smoothed = ndi.gaussian_filter(responses, sigma=0.5)
 
         # Simple peak detection - check all 8 neighbors
         for i in range(1, 2*radius):
             for j in range(1, 2*radius):
-                is_peak = (responses[i, j] > threshold)
+                is_peak = (responses_smoothed[i, j] > threshold)
                 for ni in [-1, 0, 1]:
                     for nj in [-1, 0, 1]:
                         if ni == 0 and nj == 0:
                             continue
-                        is_peak = is_peak and (responses[i, j] > responses[i+ni, j+nj])
+                        is_peak = is_peak and (responses_smoothed[i, j] > responses_smoothed[i+ni, j+nj])
                 
                 if is_peak and (i, j) in grid_to_world:
             
@@ -593,14 +564,6 @@ class VesselCenterlineExtractor:
                     if len(peaks) > 1:
                         self.logger.info(f" Bifurcation detected at {point} with {len(peaks)} peaks")
                         
-                        """ # Visualize the first few bifurcations
-                        if branch_id < 3:  # Just visualize first few branches
-                            fig, _ = self.visualize_bifurcation_response(
-                                point, 
-                                save_path=f"./graphs/bifurcation_branch{branch_id}_point{[int(p) for p in point]}.png",
-                                plot_3d=True
-                            )
-                            plt.close(fig)  # Close to free memory """
                         for peak in peaks:
                             # Skip peaks too close to any tree point
                             if not any(np.linalg.norm(np.array(peak) - np.array(p)) < self.step_size*0.9 for p in self.all_tree_points):
