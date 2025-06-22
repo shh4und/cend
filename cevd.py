@@ -185,7 +185,7 @@ class VesselCenterlineExtractor:
 
         term2_structure = (2.0/3.0) * lambda1 - lambda2 - lambda3 
 
-        S_squared = np.sqrt(lambda1**2 + lambda2**2 + lambda3**2)
+        S_squared = np.sqrt(np.square(lambda1) + np.square(lambda2) + np.square(lambda3))
         
         c_const = c_factor * self.volume.max() 
         if c_const < epsilon: 
