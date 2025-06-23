@@ -286,3 +286,68 @@ def o3d_interactive_maxima_points(maxima_coords, background_volume=None, point_c
     logging.info("\nFeche a janela do Open3D para continuar a execução do script.")
     vis.run()
     vis.destroy_window()
+
+
+def o3d_interactive_volume(volume, threshold_percentile=80):
+    """
+    Cria uma visualização 3D interativa para os pontos de máxima local (ex: do VFC).
+    Versão corrigida para ser compatível com versões mais recentes do Open3D.
+
+    Parâmetros:
+    -----------
+    maxima_coords : ndarray
+        Array (Nx3) de coordenadas (z, y, x) dos pontos de máxima.
+    background_volume : ndarray, opcional
+        Volume 3D de fundo para exibir como referência contextual.
+    point_color : list, opcional
+        Cor [R, G, B] para os pontos de máxima. Padrão é vermelho.
+    point_size : float, opcional
+        Tamanho dos pontos na visualização.
+    threshold_percentile : int, opcional
+        Percentil do limiar para gerar a malha do volume de fundo.
+        
+    Retorna:
+    --------
+    None (exibe uma janela de visualização interativa).
+    """
+    
+    # Criar uma janela de visualização
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(window_name="Visualização 3D dos Pontos de Máxima", width=1280, height=800)
+    
+    # Adicionar o volume de fundo como uma malha (isosuperfície), se fornecido
+    logging.info("Gerando malha do volume de fundo...")
+    # Criar isosuperfície usando marching cubes
+    threshold = np.percentile(volume, threshold_percentile)
+    verts, faces, _, _ = marching_cubes(volume, threshold)
+    
+    # Open3D espera coordenadas (x, y, z)
+    verts_for_o3d = verts[:, ::-1] # Inverte (z,y,x) para (x,y,z)
+
+    # Criar a malha para a isosuperfície
+    mesh = o3d.geometry.TriangleMesh()
+    mesh.vertices = o3d.utility.Vector3dVector(verts)
+    mesh.triangles = o3d.utility.Vector3iVector(faces)
+    
+    # Definir cor e calcular normais para sombreamento adequado
+    mesh.paint_uniform_color([0.8, 0.8, 0.8])  # Cinza claro
+    mesh.compute_vertex_normals()
+    
+    # Adicionar a malha ao visualizador
+    vis.add_geometry(mesh)
+    logging.info(f"Malha do volume de fundo adicionada com limiar no percentil {threshold_percentile}.")
+
+    
+    # Configurar propriedades de renderização
+    opt = vis.get_render_option()
+    opt.background_color = np.asarray([0.15, 0.15, 0.15])  # Fundo cinza escuro
+    # As linhas que causaram o erro foram removidas. O Open3D usará o shader padrão.
+    
+    # Adicionar um sistema de coordenadas para referência
+    coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=20.0, origin=[0,0,0])
+    vis.add_geometry(coord_frame)
+    
+    # Executar a janela de visualização interativa
+    logging.info("\nFeche a janela do Open3D para continuar a execução do script.")
+    vis.run()
+    vis.destroy_window()
