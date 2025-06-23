@@ -14,8 +14,6 @@ class DistanceFields:
         sigma_range=(1, 4, 1),
         step_size=1.0,
         neuron_threshold=0.1,
-        search_radius=9,
-        local_hessian_radius_factor=3.5,
     ):
         self.volume = img_as_float(volume)
         self.sigma_min, self.sigma_max, self.sigma_step = sigma_range
@@ -27,9 +25,7 @@ class DistanceFields:
 
         self.step_size = step_size
         self.neuron_threshold = neuron_threshold
-        self.search_radius = search_radius
-        self.local_hessian_radius_factor = local_hessian_radius_factor
-        self.eigenvalue_cache = {}
+        
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -40,10 +36,6 @@ class DistanceFields:
         Autovalores são ordenados por seus valores absolutos: |λ1| ≤ |λ2| ≤ |λ3|.
         λ1 corresponde à direção do vaso. λ2, λ3 à seção transversal.
         """
-        cache_key = (point, sigma)
-        if cache_key in self.eigenvalue_cache:
-            self.logger.debug(f"Cache HIT para autovalores em {point}, sigma {sigma}")
-            return self.eigenvalue_cache[cache_key]
 
         if hessian_matrix is None:
             self.logger.debug(f"Matriz Hessiana é None para o ponto {point} em sigma {sigma}.")
@@ -60,12 +52,10 @@ class DistanceFields:
         sorted_eigenvalues = eigenvalues[idx]
         sorted_eigenvectors = eigenvectors[:, idx] 
 
-        self.eigenvalue_cache[cache_key] = (sorted_eigenvalues, sorted_eigenvectors)
         return sorted_eigenvalues, sorted_eigenvectors
 
-    def mean_threshold(self):
+    def mean_threshold(self, volume):
 
-        volume = self.volume.copy()
         curr_thresh = np.mean(volume)
         while True:
 
@@ -99,10 +89,10 @@ class DistanceFields:
 
         edge_map = np.sqrt(np.square(sobelz) + np.square(sobely) + np.square(sobelx))
 
-        return img_as_float(edge_map)
+        return edge_map
 
     def tubular_enhancer(self, hessian, point, sigma):
-        epsilon = 1e-3
+        epsilon = 1e-2
         eigenvals, _ = self.compute_eigenvalues(hessian, point, sigma)
         if eigenvals is None:
             return 0.0
@@ -116,10 +106,10 @@ class DistanceFields:
         k_ = np.exp(np.negative((np.square(eigenvals))) / sum_lambda_sq)
         
         lambda1, lambda2, lambda3 = eigenvals
-        f_u = 0.0
-        if np.abs(lambda1) <= 0 + epsilon and (
-            np.abs(lambda1) * 2 < np.abs(lambda2)
-            and np.abs(lambda1) * 2 < np.abs(lambda3)
+        result = 0.0
+        if np.abs(lambda1) <= epsilon and (
+            np.abs(lambda1) < np.abs(lambda2) 
+            and np.abs(lambda1) < np.abs(lambda3) 
         ):
             for i in range(3):
                 
@@ -129,23 +119,26 @@ class DistanceFields:
         else:
             return 0.0
 
-    def anisotropic_filter(self, sigma = None):
+    def anisotropic_filter(self, volume = None, sigma = None):
 
-        if sigma == None:
+        if volume is None:
+            volume = self.volume
+        
+        if sigma is None:
             sigma = self.sigma_min
 
-        img_filtered = np.zeros_like(self.volume, dtype=float)
-        grad_mag = self.gradient_magnitude(self.volume)
+        img_filtered = np.zeros_like(volume, dtype=float)
+        grad_mag = self.gradient_magnitude(volume)
         term1 = np.exp(-np.square(grad_mag))
         
-        H_xx = ndi.gaussian_filter(self.volume, sigma=sigma, order=[0, 0, 2], mode='reflect')
-        H_yy = ndi.gaussian_filter(self.volume, sigma=sigma, order=[0, 2, 0], mode='reflect')
-        H_zz = ndi.gaussian_filter(self.volume, sigma=sigma, order=[2, 0, 0], mode='reflect')
-        H_xy = ndi.gaussian_filter(self.volume, sigma=sigma, order=[0, 1, 1], mode='reflect') # d/dy d/dx
-        H_xz = ndi.gaussian_filter(self.volume, sigma=sigma, order=[1, 0, 1], mode='reflect') # d/dz d/dx
-        H_yz = ndi.gaussian_filter(self.volume, sigma=sigma, order=[1, 1, 0], mode='reflect') # d/dz d/dy
+        H_xx = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 0, 2], mode='reflect')
+        H_yy = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 2, 0], mode='reflect')
+        H_zz = ndi.gaussian_filter(volume, sigma=sigma, order=[2, 0, 0], mode='reflect')
+        H_xy = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 1, 1], mode='reflect') # d/dy d/dx
+        H_xz = ndi.gaussian_filter(volume, sigma=sigma, order=[1, 0, 1], mode='reflect') # d/dz d/dx
+        H_yz = ndi.gaussian_filter(volume, sigma=sigma, order=[1, 1, 0], mode='reflect') # d/dz d/dy
         
-        non_zero_voxels = np.nonzero(self.volume)  # Get indices of all non-zero voxels
+        non_zero_voxels = np.nonzero(volume)  # Get indices of all non-zero voxels
         for z, y, x in zip(*non_zero_voxels):
             point = (z, y, x)
             h_zz_val = H_zz[z, y, x]
@@ -167,3 +160,20 @@ class DistanceFields:
             img_filtered[point] = term1[point] * f_u
         
         return img_as_float(img_filtered)
+
+    def multiscale_anisotropic(self, volume=None):
+        if volume is None:
+            volume = self.volume
+            
+        max_volume_response = np.zeros_like(volume, dtype=float)
+        self.logger.info(f"Starting Multiscale Anisotropic Filtering...")
+
+        for sig in self.sigmas:
+            self.logger.info(f" Multiscale Anisotropic Filtering at {sig} scale")
+            curr_response =  self.anisotropic_filter(volume, sig)
+            
+            max_volume_response = np.maximum(max_volume_response, curr_response)
+            
+        return img_as_float(max_volume_response)    
+            
+        
