@@ -28,7 +28,7 @@ class DistanceFields:
         volume,
         sigma_range=(1, 4, 1),
         step_size=1.0,
-        neuron_threshold=0.1,
+        neuron_threshold=1e-3,
     ):
         """
         Initializes the DistanceFields class.
@@ -183,7 +183,6 @@ class DistanceFields:
         Returns:
             float: The tubularity score, ranging from 0.0 to a positive value.
         """
-        epsilon = 1e-3
         eigenvalues, _ = self.compute_eigenvalues(hessian, point, sigma)
         if eigenvalues is None:
             return 0.0
@@ -199,7 +198,7 @@ class DistanceFields:
         lambda1, lambda2, lambda3 = eigenvalues
         # Condition for tubular structure: λ1 ≈ 0 and |λ1| << |λ2|, |λ3|
         is_tubular = (
-            np.abs(lambda1) <= epsilon and
+            np.abs(lambda1) <= self.neuron_threshold and
             np.abs(lambda1) < np.abs(lambda2) * 0.5 and
             np.abs(lambda1) < np.abs(lambda3) * 0.5
         )
