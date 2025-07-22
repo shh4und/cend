@@ -28,19 +28,19 @@ class DistanceFields:
         volume,
         sigma_range=(1, 4, 1),
         step_size=1.0,
-        neuron_threshold=1e-3,
+        neuron_threshold=1e-2,
     ):
         """
         Initializes the DistanceFields class.
 
         Args:
             volume (np.ndarray): The 3D input image data.
-            sigma_range (tuple): A tuple (min, max, step) for the sigma values
-                                 used in multi-scale filtering.
+            sigma_range (tuple): A tuple (min, max, step) for the sigma values used in multi-scale filtering.
             step_size (float): The step size for tracing algorithms.
             neuron_threshold (float): Initial threshold for neuron segmentation.
         """
         self.volume = img_as_float(volume)
+        self.shape = volume.shape
         sigma_min, sigma_max, sigma_step = sigma_range
         self.sigmas = np.arange(sigma_min, sigma_max + sigma_step, sigma_step).astype(float)
         if not self.sigmas.size:
@@ -48,6 +48,8 @@ class DistanceFields:
 
         self.step_size = step_size
         self.neuron_threshold = neuron_threshold
+
+        self.skeleton = dict()
 
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -87,7 +89,7 @@ class DistanceFields:
 
         return sorted_eigenvalues, sorted_eigenvectors
 
-    def adaptive_mean_mask(self, volume):
+    def adaptive_mean_mask(self, volume, zero_t=False, tol=1e-3, max_iterations=100):
         """
         Generates a binary mask using an iterative adaptive mean thresholding.
 
@@ -104,28 +106,30 @@ class DistanceFields:
                    - final_mask (np.ndarray): The resulting binary boolean mask.
                    - current_threshold (float): The converged threshold value.
         """
-        current_threshold = np.mean(volume)
-        while True:
-            lower_intensity_pixels = volume[volume <= current_threshold]
-            higher_intensity_pixels = volume[volume > current_threshold]
+        
+        if zero_t:
+            return volume > 0, 0
+        else:
+            current_threshold = np.mean(volume)
 
-            if lower_intensity_pixels.size == 0 or higher_intensity_pixels.size == 0:
-                break
+            for _ in range(max_iterations):
+                lower_intensity_pixels = volume[volume <= current_threshold]
+                higher_intensity_pixels = volume[volume > current_threshold]
 
-            lower_mean = np.mean(lower_intensity_pixels)
-            higher_mean = np.mean(higher_intensity_pixels)
+                if lower_intensity_pixels.size == 0 or higher_intensity_pixels.size == 0:
+                    break
 
-            new_threshold = (lower_mean + higher_mean) / 2
+                lower_mean = np.mean(lower_intensity_pixels)
+                higher_mean = np.mean(higher_intensity_pixels)
+                new_threshold = (lower_mean + higher_mean) / 2
 
-            if current_threshold == new_threshold:
-                break
-            else:
+                if abs(new_threshold - current_threshold) < tol:
+                    break
+
                 current_threshold = new_threshold
 
-        final_mask = np.zeros_like(volume, dtype=bool)
-        final_mask[volume > current_threshold] = True
-
-        return (final_mask, current_threshold)
+            final_mask = volume > current_threshold
+            return final_mask, current_threshold
 
     def volume_segmentation(self, mask, volume=None):
         """
@@ -143,10 +147,15 @@ class DistanceFields:
             np.ndarray: The segmented volume as a float array.
         """
         mask = img_as_bool(mask)
+        
         if volume is None:
             volume = self.volume.copy()
-
-        volume[~mask] = 0
+            
+        if mask.shape != volume.shape:
+            raise ValueError("Mask and volume must have the same shape.")
+        
+        volume[np.logical_not(mask)] = 0
+        
         return img_as_float(volume)
 
     def gradient_magnitude(self, volume):
@@ -193,17 +202,18 @@ class DistanceFields:
         if sum_lambda_sq == 0:
             return 0.0
 
-        k_factors = np.exp(np.negative((np.square(eigenvalues))) / sum_lambda_sq)
 
         lambda1, lambda2, lambda3 = eigenvalues
         # Condition for tubular structure: λ1 ≈ 0 and |λ1| << |λ2|, |λ3|
         is_tubular = (
             np.abs(lambda1) <= self.neuron_threshold and
-            np.abs(lambda1) < np.abs(lambda2) * 0.5 and
-            np.abs(lambda1) < np.abs(lambda3) * 0.5
+            np.abs(lambda1) < np.abs(lambda2)  and
+            np.abs(lambda1) < np.abs(lambda3) 
         )
 
         if is_tubular:
+            k_factors = np.exp(np.negative((np.square(eigenvalues))) / sum_lambda_sq)
+
             return np.sum(alphas * k_factors)
         else:
             return 0.0
@@ -307,7 +317,7 @@ class DistanceFields:
         boundary = mask ^ eroded_mask
         return boundary
 
-    def pressure_field(self, mask):
+    def pressure_field(self, mask, metric='euclidean'):
         """
         Computes the 'pressure' field for a given neuron mask.
 
@@ -323,8 +333,13 @@ class DistanceFields:
                         distance to the nearest background voxel.
         """
         neuron_mask = img_as_bool(mask)
-        pressure_field = ndi.distance_transform_edt(neuron_mask)
-        return pressure_field
+        
+        if metric == 'euclidean': 
+            return ndi.distance_transform_edt(neuron_mask)
+        elif metric == 'taxicab':
+            return ndi.distance_transform_cdt(neuron_mask, metric='taxicab')
+        else:
+            return ndi.distance_transform_cdt(neuron_mask, metric='chessboard')
 
     def thrust_field(self, mask, seed_point):
         """
@@ -344,7 +359,86 @@ class DistanceFields:
         seed_img = np.zeros_like(mask, dtype=bool)
         seed_img[seed_point] = True
         
-        thrust_field = ndi.distance_transform_edt(~seed_img)
-        thrust_field[~mask] = 0
+        thrust_field = ndi.distance_transform_cdt(np.logical_not(seed_img), metric='taxicab')
+        thrust_field[np.logical_not(mask)] = 0
         
-        return thrust_field
+        return thrust_field 
+    
+    def get_26_neighborhood(self, voxel):
+        z, y, x = map(int, voxel)
+        neighbors = []
+
+        for dz in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                for dx in [-1, 0, 1]:
+                    if dz == 0 and dy == 0 and dx == 0:
+                        continue
+                    nz, ny, nx = z + dz, y + dy, x + dx
+
+                    if (
+                        0 <= nz < self.shape[0] and 
+                        0 <= ny < self.shape[1] and 
+                        0 <= nx < self.shape[2]
+                    ):
+                        neighbors.append((nz, ny, nx))
+
+        return neighbors
+    
+    def highest_pressure_neighbor(self, voxel, pressure_field, neuron_mask, visited_points):
+        better_neighbor = None 
+        highest_pressure = -1.0 
+        
+        neigbors = self.get_26_neighborhood(voxel)
+        neigbors_not_visited = list(filter(lambda x: x not in visited_points, neigbors))
+        for neigh in neigbors_not_visited:
+            if neuron_mask[neigh]:
+                if pressure_field[neigh] > highest_pressure:
+                    better_neighbor = neigh
+                    highest_pressure = pressure_field[neigh]
+                    
+        return better_neighbor
+    
+    def generate_skel_from_maximas(self, maximas_set, seed_point, pressure_field, thrust_field, neuron_mask, epsilon=1.0, max_iter=1000):
+        branches = dict()
+        for maxima_point in maximas_set:
+            maxima_t = tuple(maxima_point.astype(int))
+            branch_path = []
+            branch_path.append(maxima_t)
+            current_point = maxima_t
+            visited_points = set()
+            for _ in range(max_iter):
+                if (current_point[0] == seed_point[0] and
+                    current_point[1] == seed_point[1] and
+                    current_point[2] == seed_point[2]):
+                    self.logger.info(f'branch[{maxima_t}] reached the seed_point({seed_point})')
+                    break
+                
+                visited_points.add(current_point)
+                q_star = self.highest_pressure_neighbor(current_point, pressure_field, neuron_mask, visited_points)
+                
+                if q_star is None:
+                    self.logger.info(f'q_star is None. No valid neighbors')
+                    break
+                
+                if not(thrust_field[current_point] + epsilon > thrust_field[q_star]):
+                    #self.logger.info(f'Thrust field value of q_star is greater\nthrust_field[current_point]={thrust_field[current_point] + epsilon}\nthrust_field[q_star]={thrust_field[q_star]}')
+                    break
+                
+                branch_path.append(q_star)
+                current_point = q_star
+                    
+            branches[maxima_t] = branch_path
+
+        self.logger.info("Generating skeleton...")
+        skeleton_set = set()
+        for branch in branches.values():
+            skeleton_set.update(branch)
+        
+        return np.array(list(skeleton_set)).astype(int)
+                
+        
+            
+            
+            
+            
+                

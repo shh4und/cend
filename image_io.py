@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 import os
 from skimage.util import img_as_ubyte
+import logging
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format=' - %(message)s')
 
 def load_3d_volume(folder_path: str) -> np.ndarray:
     """
@@ -99,7 +103,7 @@ def show_stack_basic(image_stack: np.ndarray):
     Args:
         image_stack (np.ndarray): A 3D NumPy array (Z, Y, X) or a single 2D image.
     """
-    if image_stack.ndim == 2:
+    if len(image_stack) == 2:
         # If a single 2D image is passed, wrap it in a list to make it iterable
         image_stack = [image_stack]
 
@@ -107,7 +111,7 @@ def show_stack_basic(image_stack: np.ndarray):
         window_name = f"Image Slice {idx}"
         cv2.imshow(window_name, image_slice)
 
-    print("Press any key to close all image windows.")
+    logging.info("Press any key to close all image windows.")
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -128,7 +132,7 @@ def show_stack_interactive(image_stack: np.ndarray, show_multiple=False):
     """
     index = 0
     num_images = len(image_stack)
-
+    logging.info("Viewing slices. Use 'a' or 'd' to navigate, 'q' to quit.")
     while True:
         if show_multiple:
             # Display three windows: previous, current, and next
@@ -142,7 +146,7 @@ def show_stack_interactive(image_stack: np.ndarray, show_multiple=False):
             # Display a single window for the current image
             cv2.imshow(f"Slice {index}/{num_images-1}", image_stack[index])
 
-        print(f"Viewing slice {index}. Use 'a'/'d' to navigate, 'q' to quit.")
+    
         key = cv2.waitKey(0)
 
         # Close current windows before opening new ones
