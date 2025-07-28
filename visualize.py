@@ -8,6 +8,68 @@ import logging
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def plot_projections(images, aggregations, axes, cmaps):
+    """
+    Plots 2D projections of 3D images in a grid with a maximum of 2 columns.
+
+    Args:
+        images (list or np.ndarray): A list of 3D numpy arrays (images) to be plotted.
+        aggregations (list or str): A list of aggregation methods ('max', 'mean', 'min').
+        axes (list or int): A list of axes (0, 1, or 2) for the projection.
+        cmaps (list or str): A list of colormaps (e.g., 'viridis', 'gray').
+    """
+    # Ensure all inputs are lists for consistent iteration
+    if not isinstance(images, list):
+        images = [images]
+    if not isinstance(aggregations, list):
+        aggregations = [aggregations] * len(images)
+    if not isinstance(axes, list):
+        axes = [axes] * len(images)
+    if not isinstance(cmaps, list):
+        cmaps = [cmaps] * len(images)
+
+    num_images = len(images)
+    ncols = 2
+    nrows = int(np.ceil(num_images / ncols))
+
+    # Create the figure and subplots in a grid
+    fig, axes_subplots = plt.subplots(nrows, ncols, figsize=(6 * ncols, 5 * nrows))
+    
+    # Flatten the axes array for easier iteration
+    if num_images > 1:
+        axes_flat = axes_subplots.flatten()
+    else:
+        axes_flat = [axes_subplots]
+
+    for i in range(num_images):
+        img = images[i]
+        aggregation = aggregations[i]
+        axis = axes[i]
+        cmap = cmaps[i]
+        
+        # Perform aggregation
+        if aggregation == 'max':
+            projected_img = np.max(img, axis=axis)
+        elif aggregation == 'mean':
+            projected_img = np.mean(img, axis=axis)
+        elif aggregation == 'min':
+            projected_img = np.min(img, axis=axis)
+        else:
+            raise ValueError(f"Unsupported aggregation method: {aggregation}. Choose from 'max', 'mean', 'min'.")
+            
+        # Plot the image in the correct subplot
+        im = axes_flat[i].imshow(projected_img, cmap=cmap)
+        axes_flat[i].set_title(f"Agg: {aggregation}, Axis: {axis}")
+        axes_flat[i].axis('off')
+        
+    # Hide any unused subplots
+    for j in range(num_images, len(axes_flat)):
+        axes_flat[j].set_visible(False)
+        
+    plt.tight_layout()
+    plt.show()
+
+
 def show_vessel_tree_3d(vessel_tree, background_volume=None):
     """
     Creates an interactive 3D visualization of a vessel or neuron tree using Open3D.
