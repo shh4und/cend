@@ -3,8 +3,10 @@ from scipy import ndimage as ndi
 from scipy import linalg
 import logging
 from skimage.util import img_as_float, img_as_bool
+from skimage.morphology import remove_small_objects
 from typing import Tuple, Optional, Dict, List, Set
 import heapq
+
 
 class DistanceFields:
     """
@@ -31,7 +33,7 @@ class DistanceFields:
         sigma_range: Tuple[float, float, float] = (1, 4, 1),
         step_size: float = 1.0,
         neuron_threshold: float = 1e-2,
-        seed_point: Tuple[int, int, int]  = (0,0,0)
+        seed_point: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     ):
         """
         Initializes the DistanceFields class.
@@ -52,11 +54,17 @@ class DistanceFields:
 
         self.step_size = step_size
         self.neuron_threshold = neuron_threshold
-        self.seed_point = seed_point
-        self.skeleton: Dict = dict()
+        self.seed_point = tuple(np.round(seed_point).tolist())
+        self.skeleton: np.ndarray = np.zeros_like(volume.shape)
 
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(self.__class__.__name__)
+
+    def set_skeleton(self, skel: np.ndarray):
+        self.skeleton = skel
+
+    def get_skeleton(self):
+        return self.skeleton
 
     def _tubular_enhancer(
         self, hessian: np.ndarray, point: Tuple[int, int, int], sigma: float
@@ -88,7 +96,6 @@ class DistanceFields:
         if lambda2 >= 0 or lambda3 >= 0 or np.abs(lambda1) > self.neuron_threshold:
             return 0.0
 
-        
         alphas = np.array([0.5, 0.5, 25.0])  # Coeficientes do artigo
         sum_lambda_sq = np.sum(np.square(eigenvalues))
         if sum_lambda_sq == 0:
@@ -121,7 +128,7 @@ class DistanceFields:
             np.ndarray: The filtered image as a float array.
         """
         if volume is None:
-            volume = self.volume
+            volume = self.volume.copy()
         if sigma is None:
             sigma = self.sigmas[0]
 
@@ -167,11 +174,13 @@ class DistanceFields:
             np.ndarray: The maximum response volume from multi-scale filtering.
         """
         if volume is None:
-            volume = self.volume
+            volume = self.volume.copy()
 
         max_response_volume = np.zeros_like(volume, dtype=float)
         self.logger.info("Starting Multiscale Anisotropic Filtering...")
-        self.logger.info(f" params: sigma_scale: {self.sigmas}, neuron_thresh: {self.neuron_threshold}")
+        self.logger.info(
+            f" params: sigma_scale: {self.sigmas}, neuron_thresh: {self.neuron_threshold}"
+        )
 
         for sig in self.sigmas:
             self.logger.info(f"-> Filtering at scale: {sig}")
@@ -189,7 +198,7 @@ class DistanceFields:
         max_iterations: int = 100,
     ) -> Tuple[np.ndarray, float]:
         """
-        Generates a binary mask using an iterative adaptive mean thresholding. (MEMORY OPTIMIZED)
+        Generates a binary mask using an iterative adaptive mean thresholding
 
         This method determines a global threshold by iteratively averaging the
         mean intensities of pixels above and below the current threshold.
@@ -251,7 +260,9 @@ class DistanceFields:
             )
             return None, None
 
-        sort_indices = np.argsort(eigenvalues)[::-1] # for bright and tubular structures lambda2 and lambda3 are high-negatives values
+        sort_indices = np.argsort(eigenvalues)[
+            ::-1
+        ]  # for bright and tubular structures lambda2 and lambda3 are high-negatives values
         return eigenvalues[sort_indices], eigenvectors[:, sort_indices]
 
     def volume_segmentation(
@@ -270,6 +281,22 @@ class DistanceFields:
         target_volume[~mask] = 0
 
         return img_as_float(target_volume)
+
+    def morphological_denoising(
+        self, neuron_mask: np.ndarray, structure: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """
+        Denoise salt and pepper noise applying opening and closing operetations.
+        """
+        strel = ndi.generate_binary_structure(3, 1) if structure is None else structure
+
+        mask = img_as_bool(
+            ndi.binary_closing(
+                ndi.binary_opening(neuron_mask, structure=strel), structure=strel
+            )
+        )
+
+        return mask
 
     def gradient_magnitude(self, volume: np.ndarray) -> np.ndarray:
         """
@@ -294,6 +321,46 @@ class DistanceFields:
         struct_element = ndi.generate_binary_structure(rank=3, connectivity=3)
         eroded_mask = ndi.binary_erosion(mask, structure=struct_element)
         return mask ^ eroded_mask
+
+    def correct_and_update_root(
+        self,
+        skeleton_image: np.ndarray,
+        original_root: Optional[Tuple[int, int, int]] = None,
+    ) -> Optional[Tuple[int, int, int]]:
+        """
+        Checks if original root is inside skeleton, if not, find the closest one point.
+
+        Args:
+            skeleton_image (np.ndarray)
+            original_root (tuple)
+
+        Returns:
+            tuple or None.
+        """
+
+        if not np.any(skeleton_image):
+            print("empty skeleton image")
+            return None
+
+        root = self.seed_point if original_root is None else original_root
+
+        # 1. Verifica se a raiz original é válida
+        if skeleton_image[root]:
+            print("original root is inside skeleton")
+            return root
+
+        skeleton_voxels = np.argwhere(skeleton_image)
+
+        # square (faster) euclidian distance from all skeleton points to the original root point
+        distances_sq = np.sum((skeleton_voxels - np.array(root)) ** 2)
+
+        # find closest index point from original root
+        closest_voxel_index = np.argmin(distances_sq)
+
+        new_valid_root = tuple(skeleton_voxels[closest_voxel_index].astype(float))
+        self.seed_point = new_valid_root
+        print(f"Root updated: {new_valid_root}. Old root: {root}")
+        return new_valid_root
 
     def find_seed_point(
         self, neuron_mask: np.ndarray
@@ -326,7 +393,7 @@ class DistanceFields:
         """
         if seed_point is None:
             seed_point = self.seed_point
-            
+
         seed_img = np.zeros_like(mask, dtype=bool)
         seed_img[seed_point] = True
 
@@ -339,13 +406,13 @@ class DistanceFields:
         self, thrust_field: np.ndarray, neuron_mask: np.ndarray, order: int = 1
     ) -> np.ndarray:
         """Finds local maxima from the thrust field."""
-        
+
         size = 1 + 2 * order
         footprint = np.ones((size, size, size))
 
         local_max = ndi.maximum_filter(thrust_field, footprint=footprint)
 
-        # a voxel is a local maxima if its value is the same as the maximum filter 
+        # a voxel is a local maxima if its value is the same as the maximum filter
         # and belongs to foreground
         maxima_mask = (thrust_field == local_max) & neuron_mask
 
@@ -381,7 +448,7 @@ class DistanceFields:
         highest_pressure = -1.0
 
         neighbors = self._get_26_neighborhood(voxel)
-        
+
         for neigh in filter(lambda n: n not in visited_points, neighbors):
             if neuron_mask[neigh] and pressure_field[neigh] > highest_pressure:
                 better_neighbor = neigh
@@ -389,96 +456,75 @@ class DistanceFields:
 
         return better_neighbor
 
-    # --- NOT APPLICABLE - NEEDS FIX ---
-    # def generate_skel_with_dijkstra(
-    #     self,
-    #     maximas_set: np.ndarray,
-    #     seed_point: Tuple[int, int, int],
-    #     pressure_field: np.ndarray,
-    #     neuron_mask: np.ndarray,
-    # ) -> np.ndarray:
-    #     """
-    #     Gera o esqueleto do neurônio usando o algoritmo de Dijkstra para encontrar o
-    #     caminho de menor custo (maior pressão) de cada máximo até o ponto semente.
+    def generate_skel_from_seed(
+        self,
+        maximas_set: np.ndarray,
+        seed_point: Tuple[int, int, int],
+        pressure_field: np.ndarray,
+        neuron_mask: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Gera o esqueleto do neurônio usando uma única busca de Dijkstra a partir do
+        ponto semente para encontrar os caminhos para todos os pontos terminais.
 
-    #     Args:
-    #         maximas_set (np.ndarray): Conjunto de coordenadas dos pontos terminais (máximos).
-    #         seed_point (Tuple[int, int, int]): As coordenadas do ponto semente.
-    #         pressure_field (np.ndarray): O campo de distância de pressão.
-    #         neuron_mask (np.ndarray): A máscara binária da região do neurônio.
+        Args:
+            maximas_set (np.ndarray): Conjunto de coordenadas dos pontos terminais (máximos).
+            seed_point (Tuple[int, int, int]): As coordenadas do ponto semente.
+            pressure_field (np.ndarray): O campo de distância de pressão.
+            neuron_mask (np.ndarray): A máscara binária da região do neurônio.
 
-    #     Returns:
-    #         np.ndarray: Um array de coordenadas representando o esqueleto.
-    #     """
-    #     skeleton_set: Set[Tuple[int, int, int]] = set()
-    #     delta = 1e-8  # Pequena constante para evitar divisão por zero
+        Returns:
+            np.ndarray: Um array de coordenadas representando o esqueleto completo.
+        """
+        skeleton_set: Set[Tuple[int, int, int]] = {seed_point}
+        delta = 1e-6  # Evitar divisão por zero
 
-    #     self.logger.info(
-    #         f"Iniciando a geração de esqueleto com Dijkstra para {len(maximas_set)} pontos terminais."
-    #     )
+        self.logger.info(
+            " - Iniciando a geração de esqueleto com busca Dijkstra reversa (1-para-muitos)."
+        )
 
-    #     for i, maxima_point in enumerate(maximas_set):
-    #         start_node = tuple(maxima_point.astype(int))
+        # Estruturas de dados para a busca única a partir do semente
+        distances = {seed_point: 0}
+        previous_nodes = {}
+        pq = [(0, seed_point)]  # Fila de prioridade começa com o semente
 
-    #         # Se o ponto máximo for o próprio semente, pule
-    #         if start_node == seed_point:
-    #             continue
+        # A busca expande a partir do semente até a fila esvaziar
+        while pq:
+            current_cost, current_voxel = heapq.heappop(pq)
 
-    #         self.logger.info(
-    #             f" -> Traçando ramo {i+1}/{len(maximas_set)} de {start_node} para {seed_point}"
-    #         )
+            if current_cost > distances.get(current_voxel, float('inf')):
+                continue
 
-    #         # Estruturas de dados para o algoritmo de Dijkstra
-    #         distances = {start_node: 0}
-    #         previous_nodes = {}
-    #         pq = [(0, start_node)]  # Fila de prioridade (custo, voxel)
+            # Explorar vizinhos
+            for neighbor in self._get_26_neighborhood(current_voxel):
+                if neuron_mask[neighbor]:
+                    # Custo é o inverso da pressão para favorecer o centro do neurito
+                    edge_weight = 1.0 / (pressure_field[neighbor] + delta)
+                    new_cost = current_cost + edge_weight
 
-    #         path_found = True
-    #         while pq:
-    #             current_cost, current_voxel = heapq.heappop(pq)
+                    if new_cost < distances.get(neighbor, float('inf')):
+                        distances[neighbor] = new_cost
+                        previous_nodes[neighbor] = current_voxel
+                        heapq.heappush(pq, (new_cost, neighbor))
 
-    #             # Se já encontramos um caminho melhor para este voxel, ignoramos
-    #             if current_cost > distances[current_voxel]:
-    #                 continue
+        self.logger.info(" - Busca de Dijkstra concluída. Reconstruindo caminhos...")
 
-    #             # Se alcançamos o objetivo, podemos parar a busca por este ramo
-    #             if current_voxel == seed_point:
-    #                 path_found = True
-    #                 break
+        # Agora, para cada máximo, reconstrua o caminho de volta para o semente
+        for maxima_point in maximas_set:
+            current = tuple(maxima_point.astype(int))
+            
+            # Se o máximo não foi alcançado pela busca, pule
+            if current not in distances:
+                # self.logger.warning(f"O ponto máximo {current} não foi alcançado pela busca a partir do semente.")
+                continue
 
-    #             # Explorar vizinhos
-    #             for neighbor in self._get_26_neighborhood(current_voxel):
-    #                 if neuron_mask[neighbor]:
-    #                     # O custo da aresta é o inverso da pressão.
-    #                     # Caminhos com alta pressão terão baixo custo.
-    #                     edge_weight = 1.0 / (pressure_field[neighbor] + delta)
+            # Traça o caminho do máximo de volta ao semente usando os predecessores
+            while current in previous_nodes:
+                skeleton_set.add(current)
+                current = previous_nodes.get(current)
 
-    #                     new_cost = current_cost + edge_weight
+        self.logger.info(" - Reconstrução de todos os ramos concluída.")
+        if not skeleton_set:
+            return np.array([], dtype=int)
 
-    #                     if new_cost < distances.get(neighbor, float("inf")):
-    #                         distances[neighbor] = new_cost
-    #                         previous_nodes[neighbor] = current_voxel
-    #                         heapq.heappush(pq, (new_cost, neighbor))
-
-    #         # Se um caminho foi encontrado, reconstrua-o e adicione ao esqueleto
-    #         if path_found:
-    #             self.logger.info(
-    #                 f"   -> Caminho de {start_node} para {seed_point} encontrado!"
-    #             )
-    #             path: List[Tuple[int, int, int]] = []
-    #             current = seed_point
-    #             while current in previous_nodes:
-    #                 path.append(current)
-    #                 current = previous_nodes[current]
-    #             path.append(start_node)
-    #             skeleton_set.update(path)
-    #         else:
-    #             self.logger.warning(
-    #                 f"   -> Não foi possível encontrar um caminho de {start_node} para {seed_point}."
-    #             )
-
-    #     self.logger.info("Geração do esqueleto concluída.")
-    #     if not skeleton_set:
-    #         return np.array([], dtype=int)
-
-    #     return np.array(list(skeleton_set), dtype=int)
+        return np.array(list(skeleton_set), dtype=int)
