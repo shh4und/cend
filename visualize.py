@@ -8,7 +8,7 @@ import logging
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def plot_projections(images, aggregations, axes, cmaps):
+def plot_projections(images, aggregations, axes, cmaps, title=None):
     """
     Plots 2D projections of 3D images in a grid with a maximum of 2 columns.
 
@@ -56,10 +56,11 @@ def plot_projections(images, aggregations, axes, cmaps):
             projected_img = np.min(img, axis=axis)
         else:
             raise ValueError(f"Unsupported aggregation method: {aggregation}. Choose from 'max', 'mean', 'min'.")
-            
+        
+        set_title = title + 'Agg: '+str(aggregation)+' Axis: '+str(axis) if title is not None else 'Agg: '+str(aggregation)+' Axis: '+str(axis)
         # Plot the image in the correct subplot
         im = axes_flat[i].imshow(projected_img, cmap=cmap)
-        axes_flat[i].set_title(f"Agg: {aggregation}, Axis: {axis}")
+        axes_flat[i].set_title(f"{set_title}")
         axes_flat[i].axis('off')
         
     # Hide any unused subplots
