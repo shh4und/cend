@@ -3,9 +3,9 @@ from scipy import ndimage as ndi
 from scipy import linalg
 import logging
 from skimage.util import img_as_float, img_as_bool
-from skimage.morphology import remove_small_objects
 from typing import Tuple, Optional, Dict, List, Set
 import heapq
+import gc
 
 
 class DistanceFields:
@@ -32,7 +32,7 @@ class DistanceFields:
         volume: np.ndarray,
         sigma_range: Tuple[float, float, float] = (1, 4, 1),
         step_size: float = 1.0,
-        neuron_threshold: float = 1e-2,
+        neuron_threshold: float = 0.05,
         seed_point: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     ):
         """
@@ -57,7 +57,7 @@ class DistanceFields:
         self.seed_point = tuple(np.round(seed_point).tolist())
         self.skeleton: np.ndarray = np.zeros_like(volume.shape)
 
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def set_skeleton(self, skel: np.ndarray):
@@ -339,14 +339,14 @@ class DistanceFields:
         """
 
         if not np.any(skeleton_image):
-            print("empty skeleton image")
+            self.logger.warning("empty skeleton image")
             return None
 
         root = self.seed_point if original_root is None else original_root
 
         # 1. Verifica se a raiz original é válida
         if skeleton_image[root]:
-            print("original root is inside skeleton")
+            self.logger.info("original root is inside skeleton")
             return root
 
         skeleton_voxels = np.argwhere(skeleton_image)
@@ -359,19 +359,8 @@ class DistanceFields:
 
         new_valid_root = tuple(skeleton_voxels[closest_voxel_index].astype(float))
         self.seed_point = new_valid_root
-        print(f"Root updated: {new_valid_root}. Old root: {root}")
+        self.logger.info(f"root updated to: {new_valid_root}")
         return new_valid_root
-
-    def find_seed_point(
-        self, neuron_mask: np.ndarray
-    ) -> Optional[Tuple[int, int, int]]:
-        """Selects a random point from the boundary voxels."""
-        boundary = self.boundary_voxels(neuron_mask)
-        boundary_coords = np.argwhere(boundary)
-        if boundary_coords.size > 0:
-            seed_coord = boundary_coords[np.random.choice(len(boundary_coords))]
-            return tuple(seed_coord)
-        return None
 
     def pressure_field(self, mask: np.ndarray, metric: str = "euclidean") -> np.ndarray:
         """
@@ -389,7 +378,7 @@ class DistanceFields:
         self, mask: np.ndarray, seed_point: Tuple[int, int, int] = None
     ) -> np.ndarray:
         """
-        Computes the 'thrust' field for a given neuron mask and seed point.
+        Computes the 'thrust' field with edt for a given neuron mask and seed point.
         """
         if seed_point is None:
             seed_point = self.seed_point
@@ -413,7 +402,7 @@ class DistanceFields:
         local_max = ndi.maximum_filter(thrust_field, footprint=footprint)
 
         # a voxel is a local maxima if its value is the same as the maximum filter
-        # and belongs to foreground
+        # and still belongs to foreground
         maxima_mask = (thrust_field == local_max) & neuron_mask
 
         return np.argwhere(maxima_mask)
@@ -436,25 +425,6 @@ class DistanceFields:
                     ):
                         neighbors.append((nz, ny, nx))
         return neighbors
-
-    def _highest_pressure_neighbor(
-        self,
-        voxel: Tuple[int, int, int],
-        pressure_field: np.ndarray,
-        neuron_mask: np.ndarray,
-        visited_points: Set[Tuple[int, int, int]],
-    ) -> Optional[Tuple[int, int, int]]:
-        better_neighbor: Optional[Tuple[int, int, int]] = None
-        highest_pressure = -1.0
-
-        neighbors = self._get_26_neighborhood(voxel)
-
-        for neigh in filter(lambda n: n not in visited_points, neighbors):
-            if neuron_mask[neigh] and pressure_field[neigh] > highest_pressure:
-                better_neighbor = neigh
-                highest_pressure = pressure_field[neigh]
-
-        return better_neighbor
 
     def generate_skel_from_seed(
         self,
@@ -480,7 +450,7 @@ class DistanceFields:
         delta = 1e-6  # Evitar divisão por zero
 
         self.logger.info(
-            " - Iniciando a geração de esqueleto com busca Dijkstra reversa (1-para-muitos)."
+            " - Iniciando a geração de esqueleto com busca Dijkstra (1-para-muitos)."
         )
 
         # Estruturas de dados para a busca única a partir do semente
