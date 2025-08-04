@@ -51,7 +51,7 @@ class VesselCenterlineExtractor:
         # Estrutura de Cache
         self.eigenvalue_cache = {}
 
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def clear_cache(self):
