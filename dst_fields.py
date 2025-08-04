@@ -5,7 +5,6 @@ import logging
 from skimage.util import img_as_float, img_as_bool
 from typing import Tuple, Optional, Dict, List, Set
 import heapq
-import gc
 
 
 class DistanceFields:
