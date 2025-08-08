@@ -2,7 +2,7 @@ import argparse
 import logging
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
-from typing import Tuple, Optional, List
+from typing import Tuple
 import gc
 
 import numpy as np
@@ -18,7 +18,7 @@ from graphs import Graph
 
 
 def process_image(args: Tuple):
-    """Executa o pipeline completo para uma única imagem com a classe de grafo refatorada."""
+    """Executes the complete neuron reconstruction pipeline for a single image."""
     (
         img_idx,
         img_path,
@@ -32,18 +32,18 @@ def process_image(args: Tuple):
         num_points_per_branch
     ) = args
 
-    logging.info(f"Processando imagem {img_idx+1}: {img_path.name}")
+    logging.info(f"Processing image {img_idx+1}: {img_path.name}")
 
-    # 1. Carregar imagem
+    # 1. Load Image
     volume = load_3d_volume(str(img_path))
 
-    # 2. Pré-processamento
+    # 2. Pre-processing
     gauss_filtered = ndi.gaussian_filter(volume, 1.0)
     min_filtered = ndi.minimum_filter(gauss_filtered, 2)
     volume[min_filtered <= 0] = 0
     del gauss_filtered, min_filtered; gc.collect()
 
-    # 3. Filtragem e Segmentação
+    # 3. Filtering and Segmentation
     df = DistanceFields(
         volume=volume,
         sigma_range=sigma_range,
@@ -60,7 +60,7 @@ def process_image(args: Tuple):
     thrust_field = ndi.gaussian_filter(df.thrust_field(clean_img_mask), 1.0)
     del img_mask; gc.collect()
 
-    # 4. Esqueletonização
+    # 4. Skeletonization
     maximas_set = df.find_thrust_maxima(thrust_field, clean_img_mask, order=maximas_min_dist)
     skel_coords = df.generate_skel_from_seed(
         maximas_set, root_coord, pressure_field, clean_img_mask
@@ -70,12 +70,12 @@ def process_image(args: Tuple):
     del clean_img_mask, thrust_field, skel_img, skel_coords, maximas_set, df, volume; gc.collect()
 
     if not np.any(clean_skel):
-        logging.error(f"Esqueleto vazio para a imagem {img_idx+1}. Pulando.")
+        logging.error(f"Empty skeleton for image {img_idx+1}. Skipping.")
         return None
 
-    
+    # Find the closest point on the skeleton to the initial root coordinate
     skel_points = np.argwhere(clean_skel)
-    distances_sq = np.sum((skel_points - np.array(root_coord))**2)
+    distances_sq = np.sum((skel_points - np.array(root_coord))**2, axis=1)
     initial_valid_root = tuple(skel_points[np.argmin(distances_sq)])
 
     g = Graph(clean_skel, initial_valid_root)
@@ -83,28 +83,28 @@ def process_image(args: Tuple):
 
     g.calculate_mst()
     
+    # 5. Pruning and Root Validation
     if pruning_threshold > 0:
         g.prune_mst_by_length(pruning_threshold)
         
+        # If pruning removed the root, find a new one in the largest remaining component
         if not g.mst.has_node(g.root):
-                logging.warning(f"A raiz {g.root} foi removida durante a poda. Encontrando uma nova raiz.")
-                if g.mst.number_of_nodes() == 0:
-                    logging.error("graph ficou vazia após a poda.")
-                    return None
-                
-                main_component = max(nx.connected_components(g.mst), key=len)
-                
-                # Encontra o nó no componente principal mais próximo da raiz original
-                nodes_in_component = np.array(list(main_component))
-                distances_to_original_root_sq = np.sum((nodes_in_component - np.array(root_coord))**2)
-                new_root = tuple(nodes_in_component[np.argmin(distances_to_original_root_sq)])
-                
-                g.root = new_root
-                logging.info(f"Nova raiz definida como {new_root}")
+            logging.warning(f"Root {g.root} was removed during pruning. Finding a new root.")
+            if g.mst.number_of_nodes() == 0:
+                logging.error("Graph became empty after pruning. Skipping.")
+                return None
+            
+            main_component = max(nx.connected_components(g.mst), key=len)
+            
+            # Find the node in the main component closest to the original root
+            nodes_in_component = np.array(list(main_component))
+            distances_to_original_root_sq = np.sum((nodes_in_component - np.array(root_coord))**2, axis=1)
+            new_root = tuple(nodes_in_component[np.argmin(distances_to_original_root_sq)])
+            
+            g.root = new_root
+            logging.info(f"New root set to {new_root}")
 
-    
-    # 5.5. SUAVIZA A ÁRVORE E SALVA O ARQUIVO SWC
-    # Esta chamada substitui g.label_nodes_for_swc() e g.save_to_swc()
+    # 6. Smooth the tree and save the SWC file
     output_filename = output_dir / f"OP_{img_idx+1}_reconstruction.swc"
     success = g.generate_smoothed_swc(
         str(output_filename), 
@@ -115,45 +115,44 @@ def process_image(args: Tuple):
     del pressure_field, g; gc.collect()
 
     if success:
-        logging.info(f"Imagem {img_idx+1} salva com sucesso em {output_filename}")
+        logging.info(f"Image {img_idx+1} successfully saved to {output_filename}")
         
-        # --- INÍCIO DA MODIFICAÇÃO: SALVAR ARQUIVO DE METADADOS ---
+        # Save a metadata file alongside the SWC
         meta_filename = output_filename.with_suffix('.meta')
         try:
             with open(meta_filename, 'w') as meta_file:
-                
-                meta_file.write(f"sigma_range: [{sigma_range[0]}, {sigma_range[1]}, {sigma_range[2]}]\n")
+                meta_file.write(f"source_image: {img_path.name}\n")
+                meta_file.write(f"sigma_range: {sigma_range}\n")
                 meta_file.write(f"neuron_threshold: {neuron_threshold}\n")
                 meta_file.write(f"pruning_threshold: {pruning_threshold}\n")
-                # Adicione quaisquer outros parâmetros que desejar salvar
-            logging.info(f"Metadados salvos em {meta_filename}")
+                meta_file.write(f"smoothing_factor: {smoothing_factor}\n")
+                meta_file.write(f"num_points_per_branch: {num_points_per_branch}\n")
+            logging.info(f"Metadata saved to {meta_filename}")
         except Exception as e:
-            logging.error(f"Falha ao salvar arquivo de metadados: {e}")
-        # --- FIM DA MODIFICAÇÃO ---
+            logging.error(f"Failed to save metadata file: {e}")
             
         return str(output_filename)
     else:
-        logging.error(f"Falha ao salvar o arquivo SWC para a imagem {img_idx+1}.")
+        logging.error(f"Failed to save SWC file for image {img_idx+1}.")
         return None
 
 def main():
-    
     parser = argparse.ArgumentParser(
-        description="Pipeline para reconstrução de neurônios e geração de arquivos SWC.",
+        description="Pipeline for neuron reconstruction and SWC file generation.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--data_dir", type=str, default="data", help="Diretório contendo as pastas das imagens.")
-    parser.add_argument("--output_dir", type=str, default="results_swc", help="Diretório para salvarp os arquivos SWC.")
-    parser.add_argument("--image_index", type=int, default=None, help="Índice da imagem a ser processada (1 a 9). Se não, processa todas.")
-    parser.add_argument("--parallel_jobs", type=int, default=2, help="Número de processos paralelos. Padrão: 2 para segurança de memória.")
-    parser.add_argument("--sigma_min", type=float, default=1.0, help="Sigma mínimo.")
-    parser.add_argument("--sigma_max", type=float, default=2.0, help="Sigma máximo.")
-    parser.add_argument("--sigma_step", type=float, default=0.5, help="Passo do sigma.")
-    parser.add_argument("--neuron_threshold", type=float, default=0.05, help="Threshold de tubularidade.")
-    parser.add_argument("--pruning_threshold", type=int, default=0, help="Comprimento máximo (em pixels/nós) de um ramo para ser podado. Defina como 0 para desativar a poda.")
-    parser.add_argument("--maximas_min_dist", type=int, default=2, help="Tamanho da janela de maximas")
-    parser.add_argument("--smoothing_factor", type=float, default=0.8, help="Fator de suavidade para a spline")
-    parser.add_argument("--num_points_per_branch", type=int, default=15, help="Numero de pontos por ramo para suavização")
+    parser.add_argument("--data_dir", type=str, default="data", help="Directory containing the image folders.")
+    parser.add_argument("--output_dir", type=str, default="results_swc", help="Directory to save the SWC files.")
+    parser.add_argument("--image_index", type=int, default=None, help="Index of the image to process (1-based). If not set, processes all.")
+    parser.add_argument("--parallel_jobs", type=int, default=2, help="Number of parallel processes. Default: 2 for memory safety.")
+    parser.add_argument("--sigma_min", type=float, default=1.0, help="Minimum sigma for multi-scale filtering.")
+    parser.add_argument("--sigma_max", type=float, default=2.0, help="Maximum sigma for multi-scale filtering.")
+    parser.add_argument("--sigma_step", type=float, default=0.5, help="Sigma step for multi-scale filtering.")
+    parser.add_argument("--neuron_threshold", type=float, default=0.05, help="Tubularity threshold.")
+    parser.add_argument("--pruning_threshold", type=int, default=0, help="Maximum length (in nodes) of a branch to be pruned. Set to 0 to disable.")
+    parser.add_argument("--maximas_min_dist", type=int, default=2, help="Window size for finding local maxima.")
+    parser.add_argument("--smoothing_factor", type=float, default=0.8, help="Smoothing factor for spline interpolation.")
+    parser.add_argument("--num_points_per_branch", type=int, default=15, help="Number of points per branch for smoothing.")
 
     args = parser.parse_args()
     
@@ -164,22 +163,16 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     image_paths = sorted([p for p in data_dir.glob("OP_*") if p.is_dir()])
+    
+    # Dataset-specific root coordinates
     roots = [
-        (0, 429, 31),
-        (25, 391, 1),
-        (38, 179, 94),
-        (0, 504, 128),
-        (33, 264, 185),
-        (10, 412, 15),
-        (39, 216, 120),
-        (55, 181, 119),
-        (4, 364, 64),
+        (0, 429, 31), (25, 391, 1), (38, 179, 94),
+        (0, 504, 128), (33, 264, 185), (10, 412, 15),
+        (39, 216, 120), (55, 181, 119), (4, 364, 64),
     ]
 
     if not image_paths or len(image_paths) != len(roots):
-        logging.error(
-            "Erro: Diretórios de imagem não encontrados ou número de raízes incompatível."
-        )
+        logging.error("Image directories not found or number of roots does not match.")
         return
 
     sigma_range = (args.sigma_min, args.sigma_max, args.sigma_step)
@@ -188,54 +181,41 @@ def main():
     task_indices = range(len(image_paths))
     if args.image_index is not None:
         if not (1 <= args.image_index <= len(image_paths)):
-            logging.error(f"Índice de imagem inválido: {args.image_index}.")
+            logging.error(f"Invalid image index: {args.image_index}. Must be between 1 and {len(image_paths)}.")
             return
         task_indices = [args.image_index - 1]
 
     for i in task_indices:
         tasks.append(
             (
-                i,
-                image_paths[i],
-                roots[i],
-                output_dir,
-                sigma_range,
-                args.neuron_threshold,
-                args.pruning_threshold,
-                args.maximas_min_dist,
-                args.smoothing_factor,
-                args.num_points_per_branch
+                i, image_paths[i], roots[i], output_dir, sigma_range,
+                args.neuron_threshold, args.pruning_threshold, args.maximas_min_dist,
+                args.smoothing_factor, args.num_points_per_branch
             )
         )
 
     if not tasks:
-        logging.warning("Nenhuma tarefa para executar.")
+        logging.warning("No tasks to execute.")
         return
 
-    # Ajuste para garantir que não usamos mais jobs que tarefas
-    num_jobs = min(args.parallel_jobs, len(tasks))
+    num_jobs = min(args.parallel_jobs, len(tasks), cpu_count())
 
     if num_jobs <= 1:
-        # Execução sequencial
-        logging.info(f"Executando {len(tasks)} tarefa(s) sequencialmente.")
-        for task in tqdm(tasks, desc="Processando Imagens"):
+        logging.info(f"Executing {len(tasks)} task(s) sequentially.")
+        for task in tqdm(tasks, desc="Processing Images"):
             process_image(task)
     else:
-        # Execução paralela
-        logging.info(
-            f"Executando {len(tasks)} tarefa(s) em paralelo com {num_jobs} jobs."
-        )
+        logging.info(f"Executing {len(tasks)} task(s) in parallel with {num_jobs} jobs.")
         with Pool(processes=num_jobs) as pool:
             list(
                 tqdm(
                     pool.imap_unordered(process_image, tasks),
                     total=len(tasks),
-                    desc="Processando Imagens",
+                    desc="Processing Images",
                 )
             )
 
-    logging.info("Pipeline concluído.")
-
+    logging.info("Pipeline finished.")
 
 if __name__ == "__main__":
     main()
