@@ -3,10 +3,10 @@
 # --- Variáveis de Configuração ---
 # Altere estes caminhos conforme a sua estrutura de diretórios.
 # $(HOME) é uma maneira segura de se referir ao seu diretório home.
-DIADEM_JAR    := $(HOME)/RMNIM/DiademMetric/DiademMetric.jar
-GOLD_DIR      := $(HOME)/RMNIM/OlfactoryProjectionFibers/GoldStandardReconstructions
+DIADEM_JAR    := ./metrics/DiademMetric/DiademMetric.jar
+GOLD_DIR      := ./data/GoldStandardReconstructions
 RESULTS_DIR   := ./results_swc
-SCORES_FILE   := scores.txt
+SCORES_FILE   := ./scores/scores.txt
 
 # Número de imagens no dataset
 N_IMAGES      := 9
@@ -28,17 +28,23 @@ evaluate:
 	@for i in $(INDICES); do \
 		GOLD_SWC="$(GOLD_DIR)/OP_$${i}.swc"; \
 		TEST_SWC="$(RESULTS_DIR)/OP_$${i}_reconstruction.swc"; \
+		META_FILE="$(RESULTS_DIR)/OP_$${i}_reconstruction.meta"; \
 		\
 		echo "Avaliando: OP_$${i}"; \
 		\
 		if [ -f "$$TEST_SWC" ]; then \
 			SCORE=$$(java -jar $(DIADEM_JAR) -G "$$GOLD_SWC" -T "$$TEST_SWC" -D 5 | grep 'Score:' | awk '{print $$2}'); \
 			\
-			echo "OP_$${i}_reconstruction Score: $$SCORE" >> $(SCORES_FILE); \
+			if [ -f "$$META_FILE" ]; then \
+				PARAMS=$$(cat "$$META_FILE" | tr '\n' ';' | sed 's/;/; /g' | sed 's/; $$//'); \
+				echo "OP_$${i}; Score: $$SCORE; $$PARAMS" >> $(SCORES_FILE); \
+			else \
+				echo "OP_$${i}; Score: $$SCORE; Params: NOT_FOUND" >> $(SCORES_FILE); \
+			fi; \
 			echo "  -> Score = $$SCORE"; \
 		else \
 			echo "  -> ERRO: Arquivo não encontrado: $$TEST_SWC. Pulando."; \
-			echo "OP_$${i}_reconstruction Score: NOT_FOUND" >> $(SCORES_FILE); \
+			echo "OP_$${i}; Score: NOT_FOUND; Params: NOT_FOUND" >> $(SCORES_FILE); \
 		fi \
 	done
 	@echo "--- Avaliação Concluída ---"
