@@ -33,6 +33,7 @@ class DistanceFields:
         step_size: float = 1.0,
         neuron_threshold: float = 0.05,
         seed_point: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        dataset_number: int = 0,
     ):
         """
         Initializes the DistanceFields class.
@@ -56,7 +57,8 @@ class DistanceFields:
         self.seed_point = tuple(np.round(seed_point).tolist())
         self.skeleton: np.ndarray = np.zeros_like(volume.shape)
 
-        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s')
+        self.dataset_number = dataset_number
+        logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s")
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def set_skeleton(self, skel: np.ndarray):
@@ -136,16 +138,45 @@ class DistanceFields:
         term1 = np.exp(-np.square(gradient_mag))
 
         # Compute second-order derivatives (Hessian components)
-        h_xx = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 0, 2], mode="reflect")
-        h_yy = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 2, 0], mode="reflect")
-        h_zz = ndi.gaussian_filter(volume, sigma=sigma, order=[2, 0, 0], mode="reflect")
-        h_xy = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 1, 1], mode="reflect")
-        h_xz = ndi.gaussian_filter(volume, sigma=sigma, order=[1, 0, 1], mode="reflect")
-        h_yz = ndi.gaussian_filter(volume, sigma=sigma, order=[1, 1, 0], mode="reflect")
-
+        h_xx = ndi.gaussian_filter(
+            volume,
+            sigma=sigma,
+            order=[0, 0, 2],
+        )
+        h_yy = ndi.gaussian_filter(
+            volume,
+            sigma=sigma,
+            order=[0, 2, 0],
+        )
+        h_zz = ndi.gaussian_filter(
+            volume,
+            sigma=sigma,
+            order=[2, 0, 0],
+        )
+        h_xy = ndi.gaussian_filter(
+            volume,
+            sigma=sigma,
+            order=[0, 1, 1],
+        )
+        h_xz = ndi.gaussian_filter(
+            volume,
+            sigma=sigma,
+            order=[1, 0, 1],
+        )
+        h_yz = ndi.gaussian_filter(
+            volume,
+            sigma=sigma,
+            order=[1, 1, 0],
+        )
+        skipped_voxels1 = 0
+        skipped_voxels2 = 0
         non_zero_voxels = np.nonzero(volume)
         for z, y, x in zip(*non_zero_voxels):
             point = (z, y, x)
+
+            trace = h_zz[z, y, x] + h_yy[z, y, x] + h_xx[z, y, x]
+            if trace >= 0:
+                continue
             hessian_matrix = np.array(
                 [
                     [h_zz[z, y, x], h_yz[z, y, x], h_xz[z, y, x]],
@@ -154,9 +185,13 @@ class DistanceFields:
                 ]
             )
 
-            tubularity_score = self._tubular_enhancer(hessian_matrix, point, sigma)
-            filtered_image[point] = term1[point] * tubularity_score
+            # hessian_det = linalg.det(hessian_matrix, check_finite=False)
+            # if hessian_det <= 0 and not self.is_negative_definite(hessian_matrix):
+            #     continue
 
+            tubularity_score = self._tubular_enhancer(hessian_matrix, point, sigma)
+            filtered_image[point] = tubularity_score  * term1[point]
+    
         return img_as_float(filtered_image)
 
     def multiscale_anisotropic(self, volume: Optional[np.ndarray] = None) -> np.ndarray:
@@ -176,17 +211,22 @@ class DistanceFields:
             volume = self.volume.copy()
 
         max_response_volume = np.zeros_like(volume, dtype=float)
-        self.logger.info("Starting Multiscale Anisotropic Filtering...")
+        self.logger.info(
+            f"OP_{self.dataset_number}: Starting Multiscale Anisotropic Filtering..."
+        )
         self.logger.info(
             f" params: sigma_scale: {self.sigmas}, neuron_thresh: {self.neuron_threshold}"
         )
 
         for sig in self.sigmas:
-            self.logger.info(f"-> Filtering at scale: {sig}")
+            self.logger.info(f"OP_{self.dataset_number} -> Filtering at scale: {sig}")
             current_response = self.anisotropic_filter(volume, sig)
             max_response_volume = np.maximum(max_response_volume, current_response)
 
-        self.logger.info("Multiscale Anisotropic Filtering complete.")
+        self.logger.info(
+            f"OP_{self.dataset_number}: Multiscale Anisotropic Filtering complete."
+        )
+        # max_response_volume /= max_response_volume.max
         return img_as_float(max_response_volume)
 
     def adaptive_mean_mask(
@@ -255,7 +295,7 @@ class DistanceFields:
             )
         except linalg.LinAlgError as e:
             self.logger.warning(
-                f"Eigenvalue decomposition failed for point {point}, sigma {sigma}: {e}"
+                f"OP_{self.dataset_number}: Eigenvalue decomposition failed for point {point}, sigma {sigma}: {e}"
             )
             return None, None
 
@@ -338,14 +378,16 @@ class DistanceFields:
         """
 
         if not np.any(skeleton_image):
-            self.logger.warning("empty skeleton image")
+            self.logger.warning(f"OP_{self.dataset_number}: empty skeleton image")
             return None
 
         root = self.seed_point if original_root is None else original_root
 
         # 1. Verifica se a raiz original é válida
         if skeleton_image[root]:
-            self.logger.info("original root is inside skeleton")
+            self.logger.info(
+                f"OP_{self.dataset_number}: original root is inside skeleton"
+            )
             return root
 
         skeleton_voxels = np.argwhere(skeleton_image)
@@ -358,7 +400,7 @@ class DistanceFields:
 
         new_valid_root = tuple(skeleton_voxels[closest_voxel_index].astype(float))
         self.seed_point = new_valid_root
-        self.logger.info(f"root updated to: {new_valid_root}")
+        self.logger.info(f"OP_{self.dataset_number}: root updated to: {new_valid_root}")
         return new_valid_root
 
     def pressure_field(self, mask: np.ndarray, metric: str = "euclidean") -> np.ndarray:
@@ -449,7 +491,7 @@ class DistanceFields:
         delta = 1e-6  # Evitar divisão por zero
 
         self.logger.info(
-            " - Iniciando a geração de esqueleto com busca Dijkstra (1-para-muitos)."
+            f" OP_{self.dataset_number}: Iniciando a geração de esqueleto com busca Dijkstra."
         )
 
         # Estruturas de dados para a busca única a partir do semente
@@ -461,7 +503,7 @@ class DistanceFields:
         while pq:
             current_cost, current_voxel = heapq.heappop(pq)
 
-            if current_cost > distances.get(current_voxel, float('inf')):
+            if current_cost > distances.get(current_voxel, float("inf")):
                 continue
 
             # Explorar vizinhos
@@ -471,17 +513,19 @@ class DistanceFields:
                     edge_weight = 1.0 / (pressure_field[neighbor] + delta)
                     new_cost = current_cost + edge_weight
 
-                    if new_cost < distances.get(neighbor, float('inf')):
+                    if new_cost < distances.get(neighbor, float("inf")):
                         distances[neighbor] = new_cost
                         previous_nodes[neighbor] = current_voxel
                         heapq.heappush(pq, (new_cost, neighbor))
 
-        self.logger.info(" - Busca de Dijkstra concluída. Reconstruindo caminhos...")
+        self.logger.info(
+            f"OP_{self.dataset_number}: Busca de Dijkstra concluída. Reconstruindo caminhos..."
+        )
 
         # Agora, para cada máximo, reconstrua o caminho de volta para o semente
         for maxima_point in maximas_set:
             current = tuple(maxima_point.astype(int))
-            
+
             # Se o máximo não foi alcançado pela busca, pule
             if current not in distances:
                 # self.logger.warning(f"O ponto máximo {current} não foi alcançado pela busca a partir do semente.")
@@ -492,8 +536,38 @@ class DistanceFields:
                 skeleton_set.add(current)
                 current = previous_nodes.get(current)
 
-        self.logger.info(" - Reconstrução de todos os ramos concluída.")
+        self.logger.info(
+            f"OP_{self.dataset_number}: Reconstrução de todos os ramos concluída."
+        )
         if not skeleton_set:
             return np.array([], dtype=int)
 
         return np.array(list(skeleton_set), dtype=int)
+
+    @staticmethod
+    def is_negative_definite(matrix):
+        """
+        Checks if a symmetric matrix is negative definite without computing eigenvalues.
+
+        Args:
+            matrix (np.ndarray): The symmetric matrix to check.
+
+        Returns:
+            bool: True if the matrix is negative definite, False otherwise.
+        """
+        # Ensure the matrix is symmetric (or nearly symmetric due to floating point)
+        if not np.allclose(matrix, matrix.T):
+            raise ValueError("Input matrix must be symmetric.")
+
+        # A is negative definite if and only if -A is positive definite
+        negative_matrix = -matrix
+
+        try:
+            # Attempt Cholesky decomposition on -A
+            # If it succeeds, -A is positive definite, meaning A is negative definite
+            np.linalg.cholesky(negative_matrix)
+            return True
+        except np.linalg.LinAlgError:
+            # If Cholesky decomposition fails, -A is not positive definite,
+            # meaning A is not negative definite
+            return False
