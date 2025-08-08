@@ -148,7 +148,7 @@ class Graph:
         
         nodes = np.array(list(self.graph.nodes()))
         # Calcula a distância euclidiana ao quadrado (mais rápido) de todos os nós para a raiz original
-        distances_sq = np.sum((nodes - np.array(original_root))**2, axis=1)
+        distances_sq = np.sum((nodes - np.array(original_root))**2)
         
         # Encontra o índice do nó com a menor distância
         closest_node_index = np.argmin(distances_sq)
@@ -194,10 +194,6 @@ class Graph:
         
         print(">> Rotulagem concluída.")
 
-    # É necessário adicionar esta importação no topo do seu arquivo graph_nx2.py
-
-    # In graph_nx2.py
-
     def generate_smoothed_swc(
         self, 
         filename: str, 
@@ -226,7 +222,7 @@ class Graph:
         radius = 1.0
         if pressure_field is not None:
             radius = max(1.0, float(pressure_field[int(z_root), int(y_root), int(x_root)]))
-        swc.add_point(1, 9, x_root, y_root, z_root, radius, -1)
+        swc.add_point(1, 2, x_root, y_root, z_root, radius, -1)
 
         visited_edges = set()
 
@@ -274,7 +270,7 @@ class Graph:
                         radius_val = ndi.map_coordinates(pressure_field, [[z], [y], [x]], order=1, mode='nearest')[0]
                         radius = max(1.0, float(radius_val))
 
-                    swc.add_point(current_id, 9, x, y, z, radius, parent_id)
+                    swc.add_point(current_id, 2, x, y, z, radius, parent_id)
                     
                     # Atualiza o parent_id para o próximo ponto na sequência
                     parent_id = current_id
@@ -321,7 +317,7 @@ class Graph:
                     pressure_field[iz, iy, ix] > 0):
                     radius = pressure_field[iz, iy, ix]
 
-            swc.add_point(attrs["id"], 9, x, y, z, radius, attrs.get("parent", -1))
+            swc.add_point(attrs["id"], 2, x, y, z, radius, attrs.get("parent", -1))
 
         print(f">> Salvando MST em {filename}")
         return swc.write_file()
