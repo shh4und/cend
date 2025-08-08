@@ -11,13 +11,11 @@ class DistanceFields:
     """
     Implements the DF-Tracing method for automatic 3D neuron reconstruction.
 
-    This class provides the tools to perform the first two steps of the DF-Tracing
-    algorithm as described in "A distance-field based automatic neuron tracing
+    This class provides tools for the first two steps of the DF-Tracing
+    algorithm described in "A distance-field based automatic neuron tracing
     method" by Yang et al. (2013). This includes:
-    1.  Image preprocessing with multi-scale anisotropic filtering to enhance
-        neurite signals.
-    2.  Generation of distance fields (pressure field) necessary for
-        skeletonization.
+    1.  Image preprocessing with multi-scale anisotropic filtering.
+    2.  Generation of distance fields for skeletonization.
 
     Attributes:
         volume (np.ndarray): The input 3D image volume, converted to float.
@@ -40,7 +38,7 @@ class DistanceFields:
 
         Args:
             volume (np.ndarray): The 3D input image data.
-            sigma_range (tuple): A tuple (min, max, step) for the sigma values used in multi-scale filtering.
+            sigma_range (tuple): A tuple (min, max, step) for the sigma values.
             step_size (float): The step size for tracing algorithms.
             neuron_threshold (float): Initial threshold for neuron segmentation.
         """
@@ -62,9 +60,11 @@ class DistanceFields:
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def set_skeleton(self, skel: np.ndarray):
+        """Sets the skeleton image."""
         self.skeleton = skel
 
     def get_skeleton(self):
+        """Returns the current skeleton image."""
         return self.skeleton
 
     def _tubular_enhancer(
@@ -73,10 +73,9 @@ class DistanceFields:
         """
         Calculates the tubularity measure based on Hessian eigenvalues.
 
-        This implements the vesselness function f(u) from Yang et al. (2013),
-        which enhances tube-like structures. The function is high when one
-        eigenvalue is close to zero and the other two are large and negative,
-        indicating a bright tubular structure.
+        This implements the vesselness function f(u) from Yang et al. (2013) to
+        enhance tube-like structures. The function is high when one eigenvalue
+        is close to zero and the other two are large and negative.
 
         Args:
             hessian (np.ndarray): The 3x3 Hessian matrix.
@@ -84,7 +83,7 @@ class DistanceFields:
             sigma (float): The scale at which the Hessian was computed.
 
         Returns:
-            float: The tubularity score, ranging from 0.0 to a positive value.
+            float: The tubularity score.
         """
         eigenvalues = self._compute_eigenvalues(hessian, point, sigma)[0]
         if eigenvalues is None:
@@ -92,20 +91,19 @@ class DistanceFields:
 
         lambda1, lambda2, lambda3 = eigenvalues
 
-        # Condição para estruturas brilhantes tipo linha (sinal alto)
-        # lambda1 proximo de 0, lambda2 e lambda3 negativos.
+        # Condition for bright, line-like structures:
+        # lambda1 is near 0, while lambda2 and lambda3 are negative.
         if lambda2 >= 0 or lambda3 >= 0 or np.abs(lambda1) > self.neuron_threshold:
             return 0.0
 
-        alphas = np.array([0.5, 0.5, 25.0])  # Coeficientes do artigo
+        alphas = np.array([0.5, 0.5, 25.0])  # Coefficients from the reference paper
         sum_lambda_sq = np.sum(np.square(eigenvalues))
         if sum_lambda_sq == 0:
             return 0.0
 
-        # f(u) da Equação 2
-        k_factors = np.exp(
-            -(np.square(eigenvalues) / (2 * sum_lambda_sq))
-        )  # O artigo pode ter um erro de digitação, geralmente há um fator 2
+        # f(u) from Equation 2 in the paper.
+        # The paper may have a typo; a factor of 2 is common here.
+        k_factors = np.exp(-(np.square(eigenvalues) / (2 * sum_lambda_sq)))
         tubularity = np.sum(alphas * k_factors)
 
         return tubularity
@@ -116,17 +114,16 @@ class DistanceFields:
         """
         Applies a Hessian-based anisotropic filter to enhance tubular structures.
 
-        This filter implements the equation v = exp(-||∇u||²) * f(u) from the paper,
-        where f(u) is the tubularity score from `_tubular_enhancer`. It enhances
-        line-like structures while suppressing noise and other shapes.
+        This implements v = exp(-||∇u||²) * f(u) from the paper, where f(u) is
+        the tubularity score from `_tubular_enhancer`.
 
         Args:
             volume (np.ndarray, optional): The input volume. Defaults to class volume.
-            sigma (float, optional): The scale (sigma) for the Gaussian derivatives.
-                                    Defaults to the minimum sigma of the class.
+            sigma (float, optional): The scale for Gaussian derivatives.
+                                     Defaults to the minimum sigma of the class.
 
         Returns:
-            np.ndarray: The filtered image as a float array.
+            np.ndarray: The filtered image.
         """
         if volume is None:
             volume = self.volume.copy()
@@ -138,38 +135,13 @@ class DistanceFields:
         term1 = np.exp(-np.square(gradient_mag))
 
         # Compute second-order derivatives (Hessian components)
-        h_xx = ndi.gaussian_filter(
-            volume,
-            sigma=sigma,
-            order=[0, 0, 2],
-        )
-        h_yy = ndi.gaussian_filter(
-            volume,
-            sigma=sigma,
-            order=[0, 2, 0],
-        )
-        h_zz = ndi.gaussian_filter(
-            volume,
-            sigma=sigma,
-            order=[2, 0, 0],
-        )
-        h_xy = ndi.gaussian_filter(
-            volume,
-            sigma=sigma,
-            order=[0, 1, 1],
-        )
-        h_xz = ndi.gaussian_filter(
-            volume,
-            sigma=sigma,
-            order=[1, 0, 1],
-        )
-        h_yz = ndi.gaussian_filter(
-            volume,
-            sigma=sigma,
-            order=[1, 1, 0],
-        )
-        skipped_voxels1 = 0
-        skipped_voxels2 = 0
+        h_xx = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 0, 2])
+        h_yy = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 2, 0])
+        h_zz = ndi.gaussian_filter(volume, sigma=sigma, order=[2, 0, 0])
+        h_xy = ndi.gaussian_filter(volume, sigma=sigma, order=[0, 1, 1])
+        h_xz = ndi.gaussian_filter(volume, sigma=sigma, order=[1, 0, 1])
+        h_yz = ndi.gaussian_filter(volume, sigma=sigma, order=[1, 1, 0])
+        
         non_zero_voxels = np.nonzero(volume)
         for z, y, x in zip(*non_zero_voxels):
             point = (z, y, x)
@@ -177,6 +149,7 @@ class DistanceFields:
             trace = h_zz[z, y, x] + h_yy[z, y, x] + h_xx[z, y, x]
             if trace >= 0:
                 continue
+            
             hessian_matrix = np.array(
                 [
                     [h_zz[z, y, x], h_yz[z, y, x], h_xz[z, y, x]],
@@ -185,13 +158,9 @@ class DistanceFields:
                 ]
             )
 
-            # hessian_det = linalg.det(hessian_matrix, check_finite=False)
-            # if hessian_det <= 0 and not self.is_negative_definite(hessian_matrix):
-            #     continue
-
             tubularity_score = self._tubular_enhancer(hessian_matrix, point, sigma)
-            filtered_image[point] = tubularity_score  * term1[point]
-    
+            filtered_image[point] = tubularity_score * term1[point]
+
         return img_as_float(filtered_image)
 
     def multiscale_anisotropic(self, volume: Optional[np.ndarray] = None) -> np.ndarray:
@@ -199,7 +168,7 @@ class DistanceFields:
         Applies the anisotropic filter across a range of scales (sigmas).
 
         The final response for each voxel is the maximum response found across
-        all scales. This allows detection of neurites with varying thicknesses.
+        all scales, allowing detection of neurites with varying thicknesses.
 
         Args:
             volume (np.ndarray, optional): The input volume. Defaults to class volume.
@@ -211,22 +180,15 @@ class DistanceFields:
             volume = self.volume.copy()
 
         max_response_volume = np.zeros_like(volume, dtype=float)
-        self.logger.info(
-            f"OP_{self.dataset_number}: Starting Multiscale Anisotropic Filtering..."
-        )
-        self.logger.info(
-            f" params: sigma_scale: {self.sigmas}, neuron_thresh: {self.neuron_threshold}"
-        )
+        self.logger.info(f"OP_{self.dataset_number}: Starting Multiscale Anisotropic Filtering...")
+        self.logger.info(f" params: sigma_scale: {self.sigmas}, neuron_thresh: {self.neuron_threshold}")
 
         for sig in self.sigmas:
             self.logger.info(f"OP_{self.dataset_number} -> Filtering at scale: {sig}")
             current_response = self.anisotropic_filter(volume, sig)
             max_response_volume = np.maximum(max_response_volume, current_response)
 
-        self.logger.info(
-            f"OP_{self.dataset_number}: Multiscale Anisotropic Filtering complete."
-        )
-        # max_response_volume /= max_response_volume.max
+        self.logger.info(f"OP_{self.dataset_number}: Multiscale Anisotropic Filtering complete.")
         return img_as_float(max_response_volume)
 
     def adaptive_mean_mask(
@@ -237,7 +199,7 @@ class DistanceFields:
         max_iterations: int = 100,
     ) -> Tuple[np.ndarray, float]:
         """
-        Generates a binary mask using an iterative adaptive mean thresholding
+        Generates a binary mask using iterative adaptive mean thresholding.
 
         This method determines a global threshold by iteratively averaging the
         mean intensities of pixels above and below the current threshold.
@@ -249,7 +211,7 @@ class DistanceFields:
             max_iterations (int): Maximum number of iterations.
 
         Returns:
-            tuple: A tuple containing the binary boolean mask and the converged threshold value.
+            tuple: A tuple containing the binary boolean mask and the final threshold.
         """
         if zero_t:
             return volume > 0, 0.0
@@ -257,15 +219,12 @@ class DistanceFields:
         current_threshold = np.mean(volume)
 
         for _ in range(max_iterations):
-            # Use boolean masking to avoid creating copies of data subsets
             higher_mask = volume > current_threshold
             lower_mask = ~higher_mask
 
-            # Check if any region is empty
             if not np.any(higher_mask) or not np.any(lower_mask):
                 break
 
-            # Calculate means efficiently
             mean_higher = np.sum(volume[higher_mask]) / np.count_nonzero(higher_mask)
             mean_lower = np.sum(volume[lower_mask]) / np.count_nonzero(lower_mask)
 
@@ -283,11 +242,10 @@ class DistanceFields:
         self, hessian_matrix: np.ndarray, point: Tuple[int, int, int], sigma: float
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
-        Computes eigenvalues and eigenvectors of the Hessian matrix at a point.
+        Computes eigenvalues and eigenvectors of the Hessian matrix.
 
-        The eigenvalues are sorted by their absolute values in ascending order:
-        |λ1| ≤ |λ2| ≤ |λ3|. For a tubular structure, λ1 corresponds to the
-        direction of the vessel, while λ2 and λ3 correspond to the cross-section.
+        Eigenvalues are sorted by value in descending order. For a bright tubular
+        structure, λ1 is near zero, while λ2 and λ3 are large negative values.
         """
         try:
             eigenvalues, eigenvectors = linalg.eigh(
@@ -299,48 +257,37 @@ class DistanceFields:
             )
             return None, None
 
-        sort_indices = np.argsort(eigenvalues)[
-            ::-1
-        ]  # for bright and tubular structures lambda2 and lambda3 are high-negatives values
+        sort_indices = np.argsort(eigenvalues)[::-1]
         return eigenvalues[sort_indices], eigenvectors[:, sort_indices]
 
     def volume_segmentation(
         self, mask: np.ndarray, volume: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """
-        Segments a volume by applying a binary mask.
-        """
+        """Applies a binary mask to the volume, setting non-masked voxels to 0."""
         mask = img_as_bool(mask)
-
         target_volume = self.volume.copy() if volume is None else volume.copy()
 
         if mask.shape != target_volume.shape:
             raise ValueError("Mask and volume must have the same shape.")
 
         target_volume[~mask] = 0
-
         return img_as_float(target_volume)
 
     def morphological_denoising(
         self, neuron_mask: np.ndarray, structure: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """
-        Denoise salt and pepper noise applying opening and closing operetations.
-        """
+        """Removes salt-and-pepper noise using morphological opening and closing."""
         strel = ndi.generate_binary_structure(3, 1) if structure is None else structure
-
+        
         mask = img_as_bool(
             ndi.binary_closing(
                 ndi.binary_opening(neuron_mask, structure=strel), structure=strel
             )
         )
-
         return mask
 
     def gradient_magnitude(self, volume: np.ndarray) -> np.ndarray:
-        """
-        Computes the gradient magnitude of the volume using Sobel operators.
-        """
+        """Computes the gradient magnitude of the volume using Sobel operators."""
         sobel_z = ndi.sobel(volume, 0)
         sobel_y = ndi.sobel(volume, 1)
         sobel_x = ndi.sobel(volume, 2)
@@ -353,9 +300,7 @@ class DistanceFields:
         return magnitude
 
     def boundary_voxels(self, volume: np.ndarray) -> np.ndarray:
-        """
-        Finds the boundary voxels of a binary mask using morphological erosion.
-        """
+        """Finds the boundary voxels of a binary mask using morphological erosion."""
         mask = volume.astype(bool)
         struct_element = ndi.generate_binary_structure(rank=3, connectivity=3)
         eroded_mask = ndi.binary_erosion(mask, structure=struct_element)
@@ -367,59 +312,55 @@ class DistanceFields:
         original_root: Optional[Tuple[int, int, int]] = None,
     ) -> Optional[Tuple[int, int, int]]:
         """
-        Checks if original root is inside skeleton, if not, find the closest one point.
+        Validates if the root is on the skeleton. If not, finds the closest point.
 
         Args:
-            skeleton_image (np.ndarray)
-            original_root (tuple)
+            skeleton_image (np.ndarray): The binary skeleton image.
+            original_root (tuple, optional): The root point to check.
 
         Returns:
-            tuple or None.
+            A tuple with the new valid root coordinates or None if skeleton is empty.
         """
-
         if not np.any(skeleton_image):
-            self.logger.warning(f"OP_{self.dataset_number}: empty skeleton image")
+            self.logger.warning(f"OP_{self.dataset_number}: Empty skeleton image.")
             return None
 
         root = self.seed_point if original_root is None else original_root
 
-        # 1. Verifica se a raiz original é válida
+        # Check if the original root is on a skeleton voxel.
         if skeleton_image[root]:
-            self.logger.info(
-                f"OP_{self.dataset_number}: original root is inside skeleton"
-            )
+            self.logger.info(f"OP_{self.dataset_number}: Original root is inside skeleton.")
             return root
 
         skeleton_voxels = np.argwhere(skeleton_image)
+        
+        # Squared Euclidean distance (faster) to find the closest point.
+        distances_sq = np.sum((skeleton_voxels - np.array(root)) ** 2, axis=1)
 
-        # square (faster) euclidian distance from all skeleton points to the original root point
-        distances_sq = np.sum((skeleton_voxels - np.array(root)) ** 2)
-
-        # find closest index point from original root
+        # Find the index of the closest voxel.
         closest_voxel_index = np.argmin(distances_sq)
-
         new_valid_root = tuple(skeleton_voxels[closest_voxel_index].astype(float))
+        
         self.seed_point = new_valid_root
-        self.logger.info(f"OP_{self.dataset_number}: root updated to: {new_valid_root}")
+        self.logger.info(f"OP_{self.dataset_number}: Root updated to: {new_valid_root}")
         return new_valid_root
 
     def pressure_field(self, mask: np.ndarray, metric: str = "euclidean") -> np.ndarray:
         """
-        Computes the 'pressure' field for a given neuron mask.
+        Computes the 'pressure' field (distance transform) for a given mask.
         """
         neuron_mask = img_as_bool(mask)
         if metric == "euclidean":
             return ndi.distance_transform_edt(neuron_mask)
         elif metric == "taxicab":
             return ndi.distance_transform_cdt(neuron_mask, metric="taxicab")
-        else:
-            return ndi.distance_transform_cdt(neuron_mask, metric="chessboard")
+        
 
     def thrust_field(
         self, mask: np.ndarray, seed_point: Tuple[int, int, int] = None
     ) -> np.ndarray:
         """
-        Computes the 'thrust' field with edt for a given neuron mask and seed point.
+        Computes the 'thrust' field (Euclidean distance from a seed) within a mask.
         """
         if seed_point is None:
             seed_point = self.seed_point
@@ -429,28 +370,25 @@ class DistanceFields:
 
         thrust_field = ndi.distance_transform_edt(~seed_img)
         thrust_field[~mask] = 0
-
         return thrust_field
 
     def find_thrust_maxima(
         self, thrust_field: np.ndarray, neuron_mask: np.ndarray, order: int = 1
     ) -> np.ndarray:
-        """Finds local maxima from the thrust field."""
-
+        """Finds local maxima in the thrust field."""
         size = 1 + 2 * order
         footprint = np.ones((size, size, size))
-
         local_max = ndi.maximum_filter(thrust_field, footprint=footprint)
 
-        # a voxel is a local maxima if its value is the same as the maximum filter
-        # and still belongs to foreground
+        # A voxel is a local maximum if it matches the maximum-filtered value
+        # and is part of the foreground.
         maxima_mask = (thrust_field == local_max) & neuron_mask
-
         return np.argwhere(maxima_mask)
 
     def _get_26_neighborhood(
         self, voxel: Tuple[int, int, int]
     ) -> List[Tuple[int, int, int]]:
+        """Gets the 26-connected neighbors of a voxel within volume bounds."""
         z, y, x = voxel
         neighbors = []
         for dz in [-1, 0, 1]:
@@ -475,41 +413,38 @@ class DistanceFields:
         neuron_mask: np.ndarray,
     ) -> np.ndarray:
         """
-        Gera o esqueleto do neurônio usando uma única busca de Dijkstra a partir do
-        ponto semente para encontrar os caminhos para todos os pontos terminais.
+        Generates the skeleton using a single Dijkstra search from the seed point
+        to all terminal points (maxima).
 
         Args:
-            maximas_set (np.ndarray): Conjunto de coordenadas dos pontos terminais (máximos).
-            seed_point (Tuple[int, int, int]): As coordenadas do ponto semente.
-            pressure_field (np.ndarray): O campo de distância de pressão.
-            neuron_mask (np.ndarray): A máscara binária da região do neurônio.
+            maximas_set (np.ndarray): Coordinates of the terminal (maxima) points.
+            seed_point (Tuple[int, int, int]): The coordinates of the seed point.
+            pressure_field (np.ndarray): The pressure distance field.
+            neuron_mask (np.ndarray): The binary mask of the neuron region.
 
         Returns:
-            np.ndarray: Um array de coordenadas representando o esqueleto completo.
+            np.ndarray: An array of coordinates representing the complete skeleton.
         """
         skeleton_set: Set[Tuple[int, int, int]] = {seed_point}
-        delta = 1e-6  # Evitar divisão por zero
+        delta = 1e-6  # Add delta to avoid division by zero
 
-        self.logger.info(
-            f" OP_{self.dataset_number}: Iniciando a geração de esqueleto com busca Dijkstra."
-        )
+        self.logger.info(f"OP_{self.dataset_number}: Starting skeleton generation with Dijkstra's search.")
 
-        # Estruturas de dados para a busca única a partir do semente
+        # Data structures for Dijkstra's algorithm from the seed
         distances = {seed_point: 0}
         previous_nodes = {}
-        pq = [(0, seed_point)]  # Fila de prioridade começa com o semente
+        pq = [(0, seed_point)]  # Priority queue initialized with the seed point
 
-        # A busca expande a partir do semente até a fila esvaziar
         while pq:
             current_cost, current_voxel = heapq.heappop(pq)
 
             if current_cost > distances.get(current_voxel, float("inf")):
                 continue
 
-            # Explorar vizinhos
+            # Explore neighbors
             for neighbor in self._get_26_neighborhood(current_voxel):
                 if neuron_mask[neighbor]:
-                    # Custo é o inverso da pressão para favorecer o centro do neurito
+                    # Cost is the inverse of pressure to favor paths through the neurite center
                     edge_weight = 1.0 / (pressure_field[neighbor] + delta)
                     new_cost = current_cost + edge_weight
 
@@ -518,27 +453,22 @@ class DistanceFields:
                         previous_nodes[neighbor] = current_voxel
                         heapq.heappush(pq, (new_cost, neighbor))
 
-        self.logger.info(
-            f"OP_{self.dataset_number}: Busca de Dijkstra concluída. Reconstruindo caminhos..."
-        )
+        self.logger.info(f"OP_{self.dataset_number}: Dijkstra's search complete. Reconstructing paths...")
 
-        # Agora, para cada máximo, reconstrua o caminho de volta para o semente
+        # Reconstruct the path from each maximum back to the seed
         for maxima_point in maximas_set:
             current = tuple(maxima_point.astype(int))
 
-            # Se o máximo não foi alcançado pela busca, pule
             if current not in distances:
-                # self.logger.warning(f"O ponto máximo {current} não foi alcançado pela busca a partir do semente.")
+                # Skip maxima that were not reached by the search
                 continue
 
-            # Traça o caminho do máximo de volta ao semente usando os predecessores
+            # Trace the path from the maximum back to the seed using predecessors
             while current in previous_nodes:
                 skeleton_set.add(current)
                 current = previous_nodes.get(current)
 
-        self.logger.info(
-            f"OP_{self.dataset_number}: Reconstrução de todos os ramos concluída."
-        )
+        self.logger.info(f"OP_{self.dataset_number}: Branch reconstruction complete.")
         if not skeleton_set:
             return np.array([], dtype=int)
 
@@ -547,7 +477,7 @@ class DistanceFields:
     @staticmethod
     def is_negative_definite(matrix):
         """
-        Checks if a symmetric matrix is negative definite without computing eigenvalues.
+        Checks if a symmetric matrix is negative definite using Cholesky decomposition.
 
         Args:
             matrix (np.ndarray): The symmetric matrix to check.
@@ -555,19 +485,16 @@ class DistanceFields:
         Returns:
             bool: True if the matrix is negative definite, False otherwise.
         """
-        # Ensure the matrix is symmetric (or nearly symmetric due to floating point)
         if not np.allclose(matrix, matrix.T):
             raise ValueError("Input matrix must be symmetric.")
 
-        # A is negative definite if and only if -A is positive definite
+        # A matrix is negative definite if and only if its negation is positive definite.
         negative_matrix = -matrix
 
         try:
-            # Attempt Cholesky decomposition on -A
-            # If it succeeds, -A is positive definite, meaning A is negative definite
+            # Attempt Cholesky decomposition. It succeeds only for positive-definite matrices.
             np.linalg.cholesky(negative_matrix)
             return True
         except np.linalg.LinAlgError:
-            # If Cholesky decomposition fails, -A is not positive definite,
-            # meaning A is not negative definite
+            # Decomposition failed, so the matrix is not positive-definite.
             return False
