@@ -122,7 +122,9 @@ def process_image(args: Tuple):
         try:
             with open(meta_filename, 'w') as meta_file:
                 meta_file.write(f"source_image: {img_path.name}\n")
-                meta_file.write(f"sigma_range: {sigma_range}\n")
+                meta_file.write(f"sig_max: {sigma_range[0]}\n")
+                meta_file.write(f"sig_min: {sigma_range[1]}\n")
+                meta_file.write(f"sig_step: {sigma_range[2]}\n")
                 meta_file.write(f"neuron_threshold: {neuron_threshold}\n")
                 meta_file.write(f"pruning_threshold: {pruning_threshold}\n")
                 meta_file.write(f"smoothing_factor: {smoothing_factor}\n")
