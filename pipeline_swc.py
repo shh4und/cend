@@ -22,6 +22,7 @@ def process_image(args: Tuple):
     (
         img_idx,
         img_path,
+        filter_type,
         root_coord,
         output_dir,
         sigma_range,
@@ -46,13 +47,14 @@ def process_image(args: Tuple):
     # 3. Filtering and Segmentation
     df = DistanceFields(
         volume=volume,
+        filter_type=filter_type,
         sigma_range=sigma_range,
         neuron_threshold=neuron_threshold,
         seed_point=root_coord,
         dataset_number=img_idx+1
     )
-    img_filtered = df.multiscale_anisotropic()
-    img_mask = df.adaptive_mean_mask(img_filtered)[0]
+    img_filtered = df.multiscale_filtering()
+    img_mask = df.adaptive_mean_mask(img_filtered, zero_t=True if filter_type != "yang" else False)[0]
     del img_filtered; gc.collect()
 
     clean_img_mask = df.morphological_denoising(img_mask)
@@ -122,8 +124,9 @@ def process_image(args: Tuple):
         try:
             with open(meta_filename, 'w') as meta_file:
                 meta_file.write(f"source_image: {img_path.name}\n")
-                meta_file.write(f"sig_max: {sigma_range[0]}\n")
-                meta_file.write(f"sig_min: {sigma_range[1]}\n")
+                meta_file.write(f"filter_type: {filter_type}\n")
+                meta_file.write(f"sig_min: {sigma_range[0]}\n")
+                meta_file.write(f"sig_max: {sigma_range[1]}\n")
                 meta_file.write(f"sig_step: {sigma_range[2]}\n")
                 meta_file.write(f"neuron_threshold: {neuron_threshold}\n")
                 meta_file.write(f"pruning_threshold: {pruning_threshold}\n")
@@ -147,6 +150,7 @@ def main():
     parser.add_argument("--output_dir", type=str, default="results_swc", help="Directory to save the SWC files.")
     parser.add_argument("--image_index", type=int, default=None, help="Index of the image to process (1-based). If not set, processes all.")
     parser.add_argument("--parallel_jobs", type=int, default=2, help="Number of parallel processes. Default: 2 for memory safety.")
+    parser.add_argument("--filter_type", type=str, default="yang", help="Choose which tubular filter to apply.")
     parser.add_argument("--sigma_min", type=float, default=1.0, help="Minimum sigma for multi-scale filtering.")
     parser.add_argument("--sigma_max", type=float, default=2.0, help="Maximum sigma for multi-scale filtering.")
     parser.add_argument("--sigma_step", type=float, default=0.5, help="Sigma step for multi-scale filtering.")
@@ -190,7 +194,7 @@ def main():
     for i in task_indices:
         tasks.append(
             (
-                i, image_paths[i], roots[i], output_dir, sigma_range,
+                i, image_paths[i], args.filter_type, roots[i], output_dir, sigma_range,
                 args.neuron_threshold, args.pruning_threshold, args.maximas_min_dist,
                 args.smoothing_factor, args.num_points_per_branch
             )
