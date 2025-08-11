@@ -35,7 +35,9 @@ all: evaluate
 evaluate:
 	@echo "--- Starting Evaluation of Reconstructions ---"
 	@mkdir -p $(SCORES_DIR)
-	@echo "$(CSV_HEADER)" > $(SCORES_FILE)
+	@if [ ! -f "$(SCORES_FILE)" ]; then \
+		echo "$(CSV_HEADER)" > "$(SCORES_FILE)"; \
+	fi
 	
 	@echo "Evaluating $(N_IMAGES) images..."
 	@for i in $(INDICES); do \
