@@ -1,58 +1,117 @@
 
-### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ###
 ## yang
 # Combinação de Sigma 1
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.05 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 # Combinação de Sigma 2
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.005 --pruning_threshold 20 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 # Combinação de Sigma 3
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.25 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.01 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+# Combinação de Sigma 4
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 ## kumar
-python pipeline_swc.py --parallel_jobs 5 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 ## frangi
-python pipeline_swc.py --parallel_jobs 5 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ### EXECUTADOS ###
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.5 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 
-### VARIAR ESTES
 ## yang
 # Combinação de Sigma 1
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.05 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.0 --sigma_max 2.5 --sigma_step 0.5 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 # Combinação de Sigma 2
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.005 --pruning_threshold 20 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 2.0 --sigma_max 4.0 --sigma_step 0.5 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 # Combinação de Sigma 3
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.25 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.01 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.5 --sigma_max 3.5 --sigma_step 0.25 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+# Combinação de Sigma 4
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 0.1 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 0.05 --pruning_threshold 8 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "yang" --sigma_min 1.25 --sigma_max 2.25 --sigma_step 0.125 --neuron_threshold 0.005 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 ## kumar
-python pipeline_swc.py --parallel_jobs 5 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "kumar" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 ## frangi
-python pipeline_swc.py --parallel_jobs 5 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
-python pipeline_swc.py --parallel_jobs 5 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --neuron_threshold 0.00 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 20 && make SCORES_FN=scores.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 3.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 2.0 --sigma_max 5.0 --sigma_step 0.5 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 0 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 4 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 12 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
+python pipeline_swc.py --parallel_jobs 6 --filter_type "frangi" --sigma_min 1.0 --sigma_max 5.0 --sigma_step 1.0 --pruning_threshold 16 --maximas_min_dist 2 --smoothing_factor 0.8 --num_points_per_branch 22 && make SCORES_FN=scores_updated.csv
 
 
