@@ -251,7 +251,7 @@ class DistanceFields:
             )
 
             hessian_det = linalg.det(hessian_matrix, check_finite=False)
-            if hessian_det <= 0 and not self.is_negative_definite(hessian_matrix):
+            if hessian_det < 0 and not self.is_negative_definite(hessian_matrix):
                 continue
             
             if self.filter_type == 'yang':
@@ -390,7 +390,7 @@ class DistanceFields:
 
         mask = img_as_bool(
             ndi.binary_closing(
-                ndi.binary_opening(neuron_mask, structure=strel), structure=strel
+                ndi .binary_opening(neuron_mask, structure=strel), structure=strel
             )
         )
         return mask
