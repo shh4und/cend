@@ -41,7 +41,7 @@ def process_image(args: Tuple):
     # 2. Pre-processing
     gauss_filtered = ndi.gaussian_filter(volume, 1.0)
     min_filtered = ndi.minimum_filter(gauss_filtered, 2)
-    volume[min_filtered <= 0] = 0
+    volume[min_filtered ==  0] = 0
     del gauss_filtered, min_filtered; gc.collect()
 
     # 3. Filtering and Segmentation
