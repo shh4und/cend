@@ -7,6 +7,7 @@ A Python implementation for automated 3D neuron reconstruction from microscopy i
 CEND implements a robust pipeline for extracting neuron centerlines from 3D microscopy volumes. The method combines multi-scale tubular filtering, distance field computation, and graph-based skeletonization to automatically trace neural structures and export them in the standard SWC format.
 
 The pipeline is designed for processing neuron datasets and provides:
+
 - **Multi-scale tubular filtering** for neuron enhancement
 - **Distance field-based tracing** for accurate centerline extraction
 - **Graph-based skeletonization** with minimum spanning tree computation
@@ -31,21 +32,28 @@ The pipeline is designed for processing neuron datasets and provides:
 - Python 3.8+
 - Java Runtime Environment (for DiademMetric evaluation)
 
+### Install from source
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/cend.git
+cd cend
+
+# Install in development mode
+pip install -e .
+
+# Or with optional dependencies
+pip install -e ".[dev,notebooks]"
+```
+
 ### Dependencies
 
-Install required Python packages:
+Core dependencies (installed automatically):
 
-```bash
-pip install numpy scipy scikit-image networkx tqdm opencv-python matplotlib open3d
-```
-
-Or create a virtual environment:
-
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install numpy scipy scikit-image networkx tqdm opencv-python matplotlib open3d
-```
+- numpy, scipy, scikit-image
+- networkx, opencv-python
+- matplotlib, open3d
+- tqdm
 
 ### DiademMetric Setup
 
@@ -57,20 +65,57 @@ For evaluation purposes, ensure the DiademMetric JAR file is present:
 
 ## Usage
 
-### Basic Pipeline Execution
+### Command Line Interface
 
 Process all images in the dataset:
 
 ```bash
-python pipeline_swc.py --data_dir ./data --output_dir ./results_swc
+cend --data_dir ./data --output_dir ./results_swc
 ```
 
-### Process a Single Image
-
-Reconstruct a specific image by index (1-based):
+Process a single image by index (1-based):
 
 ```bash
-python pipeline_swc.py --image_index 1
+cend --image_index 1
+```
+
+### Python API
+
+Use CEND programmatically in your scripts:
+
+```python
+from cend import load_3d_volume, multiscale_filtering, DistanceFields, Graph
+from cend.core.segmentation import adaptive_mean_mask, grey_morphological_denoising
+from cend.core.skeletonization import generate_skeleton_from_seed
+from cend.core.vector_fields import create_maxima_image
+import numpy as np
+from scipy import ndimage as ndi
+
+# Load data
+volume = load_3d_volume("./data/OP_1")
+
+# Apply multi-scale filtering
+filtered = multiscale_filtering(
+    volume,
+    sigma_range=(1.0, 2.0, 0.5),
+    filter_type="yang",
+    neuron_threshold=0.05
+)
+
+# Segment and extract distance fields
+mask = adaptive_mean_mask(grey_morphological_denoising(filtered))[0]
+df = DistanceFields(shape=volume.shape, seed_point=(50, 50, 50))
+pressure = df.pressure_field(mask)
+thrust = df.thrust_field(mask)
+
+# Generate skeleton
+maxima = df.find_thrust_maxima(thrust, mask, order=2)
+skeleton = generate_skeleton_from_seed(maxima, (50, 50, 50), pressure, mask, volume.shape)
+
+# Create graph and export SWC
+graph = Graph(create_maxima_image(skeleton, volume.shape), (50, 50, 50))
+graph.calculate_mst()
+graph.save_to_swc("output.swc", pressure)
 ```
 
 ### Configuration Parameters
@@ -78,7 +123,7 @@ python pipeline_swc.py --image_index 1
 Fine-tune the reconstruction with command-line arguments:
 
 ```bash
-python pipeline_swc.py \
+cend \
   --data_dir ./data \
   --output_dir ./results_swc \
   --filter_type yang \
@@ -95,20 +140,20 @@ python pipeline_swc.py \
 
 #### Parameter Reference
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `--data_dir` | Input directory containing TIFF stacks | `./data` |
-| `--output_dir` | Output directory for SWC files | `./results_swc` |
-| `--filter_type` | Tubular filter type | `yang` |
-| `--sigma_min` | Minimum sigma for multi-scale filtering | `1.0` |
-| `--sigma_max` | Maximum sigma for multi-scale filtering | `2.0` |
-| `--sigma_step` | Sigma increment step | `0.5` |
-| `--neuron_threshold` | Tubularity threshold for segmentation | `0.05` |
-| `--pruning_threshold` | Branch length threshold (nodes, 0=disabled) | `0` |
-| `--maximas_min_dist` | Window size for local maxima detection | `2` |
-| `--smoothing_factor` | Spline smoothing factor | `0.8` |
-| `--num_points_per_branch` | Points per branch in output | `15` |
-| `--parallel_jobs` | Number of parallel processes | `2` |
+| Parameter                 | Description                                 | Default         |
+| ------------------------- | ------------------------------------------- | --------------- |
+| `--data_dir`              | Input directory containing TIFF stacks      | `./data`        |
+| `--output_dir`            | Output directory for SWC files              | `./results_swc` |
+| `--filter_type`           | Tubular filter type                         | `yang`          |
+| `--sigma_min`             | Minimum sigma for multi-scale filtering     | `1.0`           |
+| `--sigma_max`             | Maximum sigma for multi-scale filtering     | `2.0`           |
+| `--sigma_step`            | Sigma increment step                        | `0.5`           |
+| `--neuron_threshold`      | Tubularity threshold for segmentation       | `0.05`          |
+| `--pruning_threshold`     | Branch length threshold (nodes, 0=disabled) | `0`             |
+| `--maximas_min_dist`      | Window size for local maxima detection      | `2`             |
+| `--smoothing_factor`      | Spline smoothing factor                     | `0.8`           |
+| `--num_points_per_branch` | Points per branch in output                 | `15`            |
+| `--parallel_jobs`         | Number of parallel processes                | `2`             |
 
 ### Evaluation with DiademMetric
 
@@ -119,6 +164,7 @@ make all
 ```
 
 This will:
+
 1. Run DiademMetric on all SWC files
 2. Generate a scores CSV file with metrics
 3. Save results to `./scores/scores.csv`
@@ -134,21 +180,44 @@ make eval FILTER_TYPE=yang SIG_MIN=1.0 SIG_MAX=2.0 SIG_STEP=0.5 \
 
 ```
 cend/
-├── pipeline_swc.py          # Main reconstruction pipeline
-├── dst_fields.py            # Distance field computation and filtering
-├── vfc.py                   # Vector field convolution utilities
-├── graphs.py                # Graph creation and MST processing
-├── swc.py                   # SWC file format handling
-├── image_io.py              # TIFF stack loading utilities
-├── visualize.py             # Visualization tools
-├── utils.py                 # Helper functions
-├── makefile                 # Evaluation automation
-├── data/                    # Input TIFF stacks
-│   ├── OP_1/ ... OP_9/     # Image datasets
+├── src/cend/                    # Main package source
+│   ├── core/                    # Core algorithms
+│   │   ├── filters.py           # Tubular filtering (Yang, Frangi, Kumar)
+│   │   ├── segmentation.py      # Thresholding and denoising
+│   │   ├── distance_fields.py   # Pressure/thrust fields
+│   │   ├── skeletonization.py   # Dijkstra-based tracing
+│   │   └── vector_fields.py     # VFC utilities
+│   ├── structures/              # Data structures
+│   │   ├── graph.py             # MST and graph operations
+│   │   └── swc.py               # SWC file format
+│   ├── io/                      # Input/output
+│   │   └── image.py             # TIFF stack loading
+│   ├── processing/              # High-level pipelines
+│   │   ├── multiscale.py        # Multi-scale filtering
+│   │   └── pipeline.py          # Main reconstruction pipeline
+│   ├── visualization/           # Visualization tools
+│   │   └── rendering.py         # 3D rendering with Open3D
+│   └── cli/                     # Command-line interface
+│       └── commands.py          # CLI entry points
+├── notebooks/                   # Jupyter notebooks
+│   ├── distance_fields.ipynb    # Algorithm demonstrations
+│   ├── tests_analysis.ipynb     # Results analysis
+│   └── research/                # Experimental code
+│       └── cevd.py              # Alternative MVEF algorithm
+├── tests/                       # Unit tests
+│   └── fixtures/                # Test data
+├── data/                        # Input TIFF stacks
+│   ├── OP_1/ ... OP_9/         # Image datasets
 │   └── GoldStandardReconstructions/
-├── results_swc/             # Output SWC files
-├── scores/                  # Evaluation results
-└── metrics/DiademMetric/    # Evaluation tool
+├── metrics/DiademMetric/        # Evaluation tool
+├── scripts/                     # Utility scripts
+├── pyproject.toml               # Package configuration
+├── makefile                     # Evaluation automation
+└── README.md                    # This file
+```
+
+└── metrics/DiademMetric/ # Evaluation tool
+
 ```
 
 ## Algorithm Pipeline
@@ -194,7 +263,7 @@ The eigenvalues $\lambda_1, \lambda_2, \lambda_3$ (ordered such that $|\lambda_1
 - **Tubular structures (neurites)**: $\lambda_1 \approx 0$, $\lambda_2 \ll 0$, $\lambda_3 \ll 0$
   - The eigenvector corresponding to $\lambda_1$ points along the tube axis
   - The eigenvectors for $\lambda_2$ and $\lambda_3$ span the cross-sectional plane
-  
+
 - **Planar structures**: $\lambda_1 \approx 0$, $\lambda_2 \approx 0$, $\lambda_3 \ll 0$
 
 - **Blob-like structures**: $\lambda_1 \ll 0$, $\lambda_2 \ll 0$, $\lambda_3 \ll 0$
@@ -296,11 +365,14 @@ Optional **branch pruning** removes terminal branches shorter than a specified t
 Output files follow the standard SWC format used in computational neuroscience:
 
 ```
+
 # n T x y z R P
+
 1 2 10.5 20.3 5.0 1.0 -1
 2 2 11.2 21.1 5.5 1.0 1
 3 2 12.0 22.5 6.0 1.0 2
 ...
+
 ```
 
 Where:
@@ -313,17 +385,19 @@ Where:
 ## Example Output
 
 ```
+
 Processing image 1: OP_1
-  ✓ Loaded volume: (64, 512, 512)
-  ✓ Applied multi-scale filtering (σ=1.0-2.0)
-  ✓ Generated distance fields
-  ✓ Created skeleton (1247 points)
-  ✓ Built graph (1247 nodes, 1246 edges)
-  ✓ Computed MST
-  ✓ Pruned 23 short branches
-  ✓ Exported to results_swc/OP_1.swc
+✓ Loaded volume: (64, 512, 512)
+✓ Applied multi-scale filtering (σ=1.0-2.0)
+✓ Generated distance fields
+✓ Created skeleton (1247 points)
+✓ Built graph (1247 nodes, 1246 edges)
+✓ Computed MST
+✓ Pruned 23 short branches
+✓ Exported to results_swc/OP_1.swc
 DiademScore: 0.8734
-```
+
+````
 
 ## Tips for Best Results
 
@@ -348,7 +422,7 @@ Execute test notebooks for algorithm validation:
 
 ```bash
 jupyter notebook tests_analysis.ipynb
-```
+````
 
 ### Visualization
 
@@ -378,6 +452,7 @@ This implementation is based on distance field tracing methods for neuron recons
 ## Acknowledgments
 
 Evaluation uses the DIADEM Metric developed for the DIADEM Challenge:
+
 - http://diademchallenge.org/
 
 ---

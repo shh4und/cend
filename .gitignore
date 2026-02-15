@@ -1,4 +1,6 @@
 *__pycache__/
+*.py[cod]
+*$py.class
 
 *.ipynb_checkpoints
 
@@ -8,3 +10,25 @@
 
 *meta
 *venv
+
+*egg-info
+build/
+dist/
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Results
+results*/
+output*/
+
+# Old modules (backup)
+dst_fields.py
