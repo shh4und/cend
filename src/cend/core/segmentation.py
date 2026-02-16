@@ -5,7 +5,7 @@ This module provides thresholding and morphological operations for segmenting
 and cleaning neuron masks.
 """
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 from scipy import ndimage as ndi
@@ -102,7 +102,7 @@ def morphological_denoising(
 
 
 def grey_morphological_denoising(
-    neuron_mask: np.ndarray, structure: Optional[np.ndarray] = None
+    neuron_mask: np.ndarray, structure: Optional[List[np.ndarray]]
 ) -> np.ndarray:
     """
     Removes salt-and-pepper noise using grey morphological opening and closing.
@@ -114,7 +114,10 @@ def grey_morphological_denoising(
     Returns:
         Denoised grayscale image.
     """
-    mask = ndi.grey_closing(ndi.grey_opening(neuron_mask, size=(3, 3, 3)), size=(3, 3, 3))
+    # strel = ndi.generate_binary_structure(3, 1) if structure is None else structure
+    mask = ndi.grey_closing(
+        ndi.grey_opening(neuron_mask, structure=structure[0]), structure=structure[1]
+    )
     return mask
 
 
