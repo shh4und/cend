@@ -216,10 +216,6 @@ cend/
 └── README.md                    # This file
 ```
 
-└── metrics/DiademMetric/ # Evaluation tool
-
-```
-
 ## Algorithm Pipeline
 
 The reconstruction follows these steps:
@@ -284,6 +280,7 @@ $$
 where $\tau$ is a threshold parameter (`neuron_threshold`) that controls sensitivity.
 
 **Key properties:**
+
 - Only responds to structures with two large negative eigenvalues (indicating tubular geometry)
 - Requires the smallest eigenvalue to be near zero (elongation condition)
 - Magnitude of response correlates with tube contrast and width
@@ -314,6 +311,7 @@ $$
 where $\mathcal{M}$ is the binary mask of neuron voxels. The pressure field represents the distance from each interior point to the nearest boundary, forming "ridges" along the centerline of tubular structures.
 
 **Properties:**
+
 - Local maxima of $P$ correspond to centerline points
 - Magnitude indicates tube thickness
 - Gradient $\nabla P$ points away from boundaries toward the medial axis
@@ -329,6 +327,7 @@ $$
 The thrust field has high values in regions where the pressure field changes rapidly, which typically occurs near the boundaries and transitions between structures.
 
 **Usage in CEND:**
+
 - Local maxima of the thrust field identify branching points and seed locations
 - Combined with the pressure field, it guides the path-finding algorithm
 - Smoothing with Gaussian filtering ($\sigma \approx 1-2$) removes noise while preserving structure
@@ -343,6 +342,7 @@ Starting from a user-specified root coordinate, the algorithm performs a **field
 4. Skeletonize the resulting binary image using morphological thinning
 
 This approach is more robust than pure morphological skeletonization because it:
+
 - Leverages intensity information from the original image
 - Reduces sensitivity to boundary irregularities
 - Produces smoother, more anatomically plausible centerlines
@@ -350,10 +350,12 @@ This approach is more robust than pure morphological skeletonization because it:
 ### Graph-Based Representation
 
 The final skeleton is represented as a **graph** $G = (V, E)$ where:
+
 - Vertices $V$ correspond to skeleton voxels
 - Edges $E$ connect 26-connected neighbors (full 3D connectivity)
 
 A **Minimum Spanning Tree (MST)** rooted at the soma location is computed using Prim's algorithm, which:
+
 - Ensures a tree structure (no cycles)
 - Minimizes total edge length
 - Provides a hierarchical representation suitable for SWC export
@@ -376,6 +378,7 @@ Output files follow the standard SWC format used in computational neuroscience:
 ```
 
 Where:
+
 - `n`: Node ID
 - `T`: Structure type (2 = axon)
 - `x, y, z`: 3D coordinates
@@ -397,12 +400,13 @@ Processing image 1: OP_1
 ✓ Exported to results_swc/OP_1.swc
 DiademScore: 0.8734
 
-````
+```
 
 ## Tips for Best Results
 
 > [!TIP]
 > Start with default parameters and adjust based on your data characteristics:
+>
 > - **Dense structures**: Increase `sigma_max` to 3.0-4.0
 > - **Noisy images**: Lower `neuron_threshold` to 0.03-0.04
 > - **Spurious branches**: Enable pruning with threshold 10-20
@@ -422,7 +426,7 @@ Execute test notebooks for algorithm validation:
 
 ```bash
 jupyter notebook tests_analysis.ipynb
-````
+```
 
 ### Visualization
 

@@ -50,6 +50,7 @@ notebooks = [
     "ipywidgets",
     "plotly",
     "pandas",
+    "ipykernel",
 ]
 all = ["cend[dev,notebooks]"]
 
