@@ -12,7 +12,10 @@ from skimage.morphology import skeletonize
 from tqdm import tqdm
 
 from ..core.distance_fields import DistanceFields
-from ..core.segmentation import adaptive_mean_mask, grey_morphological_denoising
+from ..core.segmentation import (  # ,grey_morphological_denoising
+    adaptive_mean_mask,
+    morphological_denoising,
+)
 from ..core.skeletonization import generate_skeleton_from_seed
 from ..core.vector_fields import create_maxima_image
 from ..io.image import load_3d_volume
@@ -56,34 +59,33 @@ def process_image(args: Tuple):
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-    img_grey_morpho = grey_morphological_denoising(img_filtered)
+    # img_grey_morpho = grey_morphological_denoising(img_filtered)
+
+    img_mask = adaptive_mean_mask(img_filtered, zero_t=True if filter_type != "yang" else False)[0]
     del img_filtered
     gc.collect()
-    img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=True if filter_type != "yang" else False)[
-        0
-    ]
-    del img_grey_morpho
-    gc.collect()
-
+    # del img_grey_morpho
+    # gc.collect()
+    clean_img_mask = morphological_denoising(img_mask)
     # 4. Distance Fields
     df = DistanceFields(
         shape=volume.shape,
         seed_point=root_coord,
         dataset_number=img_idx + 1,
     )
-    pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 2.0)
-    thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 1.0)
-    # del img_mask
+    pressure_field = ndi.gaussian_filter(df.pressure_field(clean_img_mask), 2.0)
+    thrust_field = ndi.gaussian_filter(df.thrust_field(clean_img_mask), 1.0)
+    del img_mask
     gc.collect()
 
     # 4. Skeletonization
-    maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
+    maximas_set = df.find_thrust_maxima(thrust_field, clean_img_mask, order=maximas_min_dist)
     skel_coords = generate_skeleton_from_seed(
-        maximas_set, root_coord, pressure_field, img_mask, volume.shape, img_idx + 1
+        maximas_set, root_coord, pressure_field, clean_img_mask, volume.shape, img_idx + 1
     )
     skel_img = create_maxima_image(skel_coords, volume.shape)
     clean_skel = skeletonize(skel_img)
-    del img_mask, thrust_field, skel_img, skel_coords, maximas_set, df, volume
+    del clean_img_mask, thrust_field, skel_img, skel_coords, maximas_set, df, volume
     gc.collect()
 
     if not np.any(clean_skel):
