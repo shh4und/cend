@@ -51,6 +51,7 @@ notebooks = [
     "plotly",
     "pandas",
     "ipykernel",
+    "nb-clean",
 ]
 all = ["cend[dev,notebooks]"]
 
