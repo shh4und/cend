@@ -7,6 +7,7 @@ from .filters import (
     frangi_vesselness,
     kumar_vesselness,
     sato_tubularity,
+    vectorized_frangi_filter,
     yang_tubularity,
 )
 from .segmentation import (
@@ -34,4 +35,5 @@ __all__ = [
     "gradient_magnitude",
     "boundary_voxels",
     "generate_skeleton_from_seed",
+    "vectorized_frangi_filter",
 ]

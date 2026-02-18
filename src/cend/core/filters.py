@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 import numpy as np
 from scipy import linalg
 from scipy import ndimage as ndi
+from skimage.feature import hessian_matrix, hessian_matrix_eigvals
 from skimage.util import img_as_float
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def frangi_vesselness(
     sigma: float,
     alpha: float = 0.5,
     beta: float = 0.5,
-    c: float = 500.0,
+    c: float = 0,
 ) -> float:
     """
     Calculates the vesselness response using the Frangi et al. (1998) filter.
@@ -155,7 +156,11 @@ def frangi_vesselness(
     Rb = lambda1_abs / (np.sqrt(lambda2_abs * lambda3_abs) + epsilon)
     # Norm of the Hessian matrix to account for overall structure intensity
     S = np.sqrt(np.sum(np.square(eigenvalues)))
-
+    if c == 0:
+        c = 0.5 * S.max()
+        # Se S.max for zero (imagem vazia), evita erro
+        if c == 0:
+            c = 1.0
     # Calculate the filter response
     exp_Ra = 1.0 - np.exp(-(Ra**2) / (2 * alpha**2))
     exp_Rb = np.exp(-(Rb**2) / (2 * beta**2))
@@ -296,7 +301,7 @@ def apply_tubular_filter(
                 [h_xz[z, y, x], h_xy[z, y, x], h_xx[z, y, x]],
             ]
         )
-
+        hessian_matrix = np.nan_to_num(hessian_matrix)
         hessian_det = linalg.det(hessian_matrix, check_finite=False)
         if hessian_det < 0 and not is_negative_definite(hessian_matrix):
             continue
@@ -313,3 +318,83 @@ def apply_tubular_filter(
         filtered_image[point] = score
 
     return img_as_float(filtered_image)
+
+
+def vectorized_frangi_filter(
+    volume: np.ndarray,
+    sigma: float,
+    alpha: float = 1,
+    beta: float = 0.8,
+    c: float = 0,  # Se None, calcula automaticamente
+) -> np.ndarray:
+
+    # 1. Calcular Hessiana e Autovalores para todo o volume (Muito rápido em C)
+    # H_elems retorna [Hrr, Hrc, Hcc] para 2D ou [Hxx, Hxy, Hxz, Hyy, Hyz, Hzz] para 3D
+    H_elems = hessian_matrix(volume, sigma=sigma, order="rc", use_gaussian_derivatives=False)
+
+    # Calcula autovalores. A função já ordena por magnitude: |l1| <= |l2| <= |l3|
+    eigvals = hessian_matrix_eigvals(H_elems)
+
+    # eigvals tem shape (3, Z, Y, X). Vamos separar.
+    # Nota: No skimage, a ordem de magnitude é crescente.
+    # lambda1 é o menor (direção do tubo), lambda2 e 3 são os maiores (seção transversal)
+    lambda1 = eigvals[0]
+    lambda2 = eigvals[1]
+    lambda3 = eigvals[2]
+
+    # 2. Definição de Constantes e Pré-cálculos
+    # Para tubos brilhantes em fundo escuro, λ2 e λ3 devem ser negativos.
+    # Como |λ2| e |λ3| são grandes, e eles são negativos, isso significa que
+    # os valores reais devem ser < 0.
+    # Vamos criar uma máscara para zerar o que não for estrutura brilhante
+    # Nota: hessian_matrix_eigvals retorna os valores reais, mas ordenados por abs.
+
+    # Condição: λ2 < 0 e λ3 < 0 (concavidade tubular brilhante)
+    # A implementação original do Frangi usa lambda2 e lambda3 ordenados por |abs|.
+    # Se ordenado por abs, l2 e l3 são os de maior magnitude.
+    weights = (lambda2 < 0) & (lambda3 < 0)
+
+    # Evitar divisão por zero
+    epsilon = 1e-10
+
+    lambda1_abs = np.abs(lambda1)
+    lambda2_abs = np.abs(lambda2)
+    lambda3_abs = np.abs(lambda3)
+
+    # 3. Termos do Frangi
+    # Ra: Plate vs Line (Diferença entre as duas maiores curvaturas)
+    # Se for linha, l2 ~= l3, então Ra ~= 1. Se for prato, l2 << l3 (ou vice versa dependendo da ordenação)
+    # Na ordenação do skimage (|l1| < |l2| < |l3|):
+    # Tubo ideal: l1=0, l2=l3.
+    # Prato ideal: l1=0, l2=0, l3 high.
+    Ra = lambda2_abs / (lambda3_abs + epsilon)
+
+    # Rb: Blob vs Line
+    # Tubo: l1=0. Rb = 0.
+    # Blob: l1=l2=l3. Rb = 1 (aprox).
+    Rb = lambda1_abs / (np.sqrt(lambda2_abs * lambda3_abs) + epsilon)
+
+    # S: Structure (Norma de Frobenius)
+    S = np.sqrt(lambda1**2 + lambda2**2 + lambda3**2)
+
+    # Ajuste automático de C se não fornecido
+    if c == 0:
+        c = 0.5 * S.max()
+        # Se S.max for zero (imagem vazia), evita erro
+        if c == 0:
+            c = 1.0
+
+    # 4. Cálculo da Resposta
+    term_a = 1.0 - np.exp(-(Ra**2) / (2 * alpha**2))
+    term_b = np.exp(-(Rb**2) / (2 * beta**2))
+    term_s = 1.0 - np.exp(-(S**2) / (2 * c**2))
+
+    vesselness = term_a * term_b * term_s
+
+    # Aplicar a restrição de "Brilhante sobre Escuro" (zerar onde curvatura é positiva)
+    vesselness[~weights] = 0
+
+    # Zerar valores NaN se houver
+    vesselness = np.nan_to_num(vesselness)
+
+    return vesselness

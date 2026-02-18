@@ -17,7 +17,7 @@ def adaptive_mean_mask(
     zero_t: bool = False,
     tol: float = 1e-3,
     max_iterations: int = 100,
-) -> Tuple[np.ndarray, float]:
+) -> Tuple:
     """
     Generates a binary mask using iterative adaptive mean thresholding.
 
