@@ -66,7 +66,7 @@ def plot_projections(images, aggregations, axes, cmaps, title=None):
             else "Agg: " + str(aggregation) + " Axis: " + str(axis)
         )
         # Plot the image in the correct subplot
-        im = axes_flat[i].imshow(projected_img, cmap=cmap)
+        axes_flat[i].imshow(projected_img, cmap=cmap)
         axes_flat[i].set_title(f"{set_title}")
         axes_flat[i].axis("off")
 
