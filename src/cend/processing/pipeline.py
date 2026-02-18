@@ -52,14 +52,14 @@ def process_image(args: Tuple):
     gc.collect()
 
     # 3. Filtering and Segmentation
-    img_filtered = multiscale_filtering(
+    img_filtered_o = multiscale_filtering(
         volume=volume,
         sigma_range=sigma_range,
         filter_type=filter_type,
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-    size = 12
+    size = 2
     y, x, z = np.ogrid[
         -size // 2 : size // 2 + 1, -size // 2 : size // 2 + 1, -size // 2 : size // 2 + 1
     ]
@@ -67,15 +67,13 @@ def process_image(args: Tuple):
     struct_nonflat = (x**2 + y**2 + z**2) * -0.5
     struct_nonflat[size // 2, size // 2, size // 2] = 0
 
-    size2 = 4
-    y2, x2, z2 = np.ogrid[
-        -size2 // 2 : size2 // 2 + 1, -size2 // 2 : size2 // 2 + 1, -size2 // 2 : size2 // 2 + 1
-    ]
-    # Uma superfície curva (valores negativos para as bordas)
-    struct_nonflat2 = (x2**2 + y2**2 + z2**2) * -0.5
-    struct_nonflat2[size2 // 2, size2 // 2, size2 // 2] = 0
+    img_filtered = img_filtered_o.copy()
 
-    img_grey_morpho = grey_morphological_denoising(img_filtered, [struct_nonflat, struct_nonflat2])
+    img_max = img_filtered.max()
+    if img_max > 0:
+        img_filtered = img_filtered / img_max
+
+    img_grey_morpho = grey_morphological_denoising(img_filtered, struct_nonflat)
     zero_t = filter_type != "yang"  # Yang usa threshold iterativo, outros usam > 0
 
     img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=zero_t)[0]

@@ -6,7 +6,8 @@ from skimage.measure import marching_cubes
 import logging
 
 # Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 def plot_projections(images, aggregations, axes, cmaps, title=None):
     """
@@ -34,7 +35,7 @@ def plot_projections(images, aggregations, axes, cmaps, title=None):
 
     # Create the figure and subplots in a grid
     fig, axes_subplots = plt.subplots(nrows, ncols, figsize=(6 * ncols, 5 * nrows))
-    
+
     # Flatten the axes array for easier iteration
     if num_images > 1:
         axes_flat = axes_subplots.flatten()
@@ -46,27 +47,33 @@ def plot_projections(images, aggregations, axes, cmaps, title=None):
         aggregation = aggregations[i]
         axis = axes[i]
         cmap = cmaps[i]
-        
+
         # Perform aggregation
-        if aggregation == 'max':
+        if aggregation == "max":
             projected_img = np.max(img, axis=axis)
-        elif aggregation == 'mean':
+        elif aggregation == "mean":
             projected_img = np.mean(img, axis=axis)
-        elif aggregation == 'min':
+        elif aggregation == "min":
             projected_img = np.min(img, axis=axis)
         else:
-            raise ValueError(f"Unsupported aggregation method: {aggregation}. Choose from 'max', 'mean', 'min'.")
-        
-        set_title = title + 'Agg: '+str(aggregation)+' Axis: '+str(axis) if title is not None else 'Agg: '+str(aggregation)+' Axis: '+str(axis)
+            raise ValueError(
+                f"Unsupported aggregation method: {aggregation}. Choose from 'max', 'mean', 'min'."
+            )
+
+        set_title = (
+            title + "Agg: " + str(aggregation) + " Axis: " + str(axis)
+            if title is not None
+            else "Agg: " + str(aggregation) + " Axis: " + str(axis)
+        )
         # Plot the image in the correct subplot
         im = axes_flat[i].imshow(projected_img, cmap=cmap)
         axes_flat[i].set_title(f"{set_title}")
-        axes_flat[i].axis('off')
-        
+        axes_flat[i].axis("off")
+
     # Hide any unused subplots
     for j in range(num_images, len(axes_flat)):
         axes_flat[j].set_visible(False)
-        
+
     plt.tight_layout()
     plt.show()
 
@@ -122,6 +129,7 @@ def show_vessel_tree_3d(vessel_tree, background_volume=None):
     visualizer.run()
     visualizer.destroy_window()
 
+
 def show_centerline_3d(centerline, background_volume=None):
     """
     Creates an interactive 3D visualization of a single centerline using Open3D.
@@ -141,7 +149,7 @@ def show_centerline_3d(centerline, background_volume=None):
 
         line_set = o3d.geometry.LineSet(
             points=o3d.utility.Vector3dVector(points),
-            lines=o3d.utility.Vector2iVector([[i, i + 1] for i in range(len(points) - 1)])
+            lines=o3d.utility.Vector2iVector([[i, i + 1] for i in range(len(points) - 1)]),
         )
         line_set.paint_uniform_color([0.0, 0.6, 1.0])  # Blue color
         visualizer.add_geometry(line_set)
@@ -165,7 +173,10 @@ def show_centerline_3d(centerline, background_volume=None):
     visualizer.run()
     visualizer.destroy_window()
 
-def show_points_3d(points, background_volume=None, color=[1.0, 0.1, 0.1], point_size=2.0, threshold_percentile=80):
+
+def show_points_3d(
+    points, background_volume=None, color=[1.0, 0.1, 0.1], point_size=2.0, threshold_percentile=80
+):
     """
     Creates an interactive 3D visualization of a point cloud.
 
@@ -192,7 +203,10 @@ def show_points_3d(points, background_volume=None, color=[1.0, 0.1, 0.1], point_
     if background_volume is not None:
         add_background_mesh(visualizer, background_volume, threshold_percentile)
 
-    setup_visualizer_options(visualizer, point_size=point_size, )
+    setup_visualizer_options(
+        visualizer,
+        point_size=point_size,
+    )
     visualizer.run()
     visualizer.destroy_window()
 
@@ -213,15 +227,15 @@ def show_volume_3d_dt(volume, distance_field, threshold_percentile=80, colormap=
     visualizer.create_window(window_name="3D Volume Visualization", width=1280, height=800)
 
     logging.info("Generating mesh from volume...")
-    threshold = np.percentile(volume[volume>0], threshold_percentile)
-    
+    threshold = np.percentile(volume[volume > 0], threshold_percentile)
+
     # marching_cubes returns vertices in (Z, Y, X) order
     verts, faces, _, _ = marching_cubes(volume, level=threshold)
 
     # Create the mesh for the isosurface
     mesh = o3d.geometry.TriangleMesh()
     # Convert vertices to Open3D format (X, Y, Z) for correct orientation
-    mesh.vertices = o3d.utility.Vector3dVector(verts[:,::-1])
+    mesh.vertices = o3d.utility.Vector3dVector(verts[:, ::-1])
     mesh.triangles = o3d.utility.Vector3iVector(faces)
     mesh.compute_vertex_normals()
 
@@ -229,22 +243,24 @@ def show_volume_3d_dt(volume, distance_field, threshold_percentile=80, colormap=
     # 1. Get the intensity of the original volume at each vertex location.
     #    'map_coordinates' interpolates the values from the volume at the vertex coordinates.
     vert_distances = ndi.map_coordinates(distance_field, verts.T, order=1)
-    
+
     # Etapa 5: Normalizar esses valores de distância para o intervalo [0, 1]
     min_dist, max_dist = vert_distances.min(), vert_distances.max()
     if (max_dist - min_dist) > 0:
         norm_distances = (vert_distances - min_dist) / (max_dist - min_dist)
     else:
         norm_distances = np.zeros_like(vert_distances)
-    
+
     # 3. Apply the colormap to the normalized intensities.
     vertex_colors = colormap(norm_distances)[:, :3]  # Get RGB, ignore Alpha
-    
+
     # 4. Assign the calculated colors to the mesh vertices.
     mesh.vertex_colors = o3d.utility.Vector3dVector(vertex_colors)
 
     visualizer.add_geometry(mesh)
-    logging.info(f"Volume mesh added with threshold at percentile {threshold_percentile} and colormap.")
+    logging.info(
+        f"Volume mesh added with threshold at percentile {threshold_percentile} and colormap."
+    )
 
     setup_visualizer_options(visualizer)
     visualizer.run()
@@ -254,29 +270,30 @@ def show_volume_3d_dt(volume, distance_field, threshold_percentile=80, colormap=
 def add_background_mesh(visualizer, volume, threshold_percentile=80):
     """Helper to add a background volume as a gray mesh to a visualizer."""
     logging.info("Generating background volume mesh...")
-    threshold = np.percentile(volume[volume>0], threshold_percentile)
+    threshold = np.percentile(volume[volume > 0], threshold_percentile)
     verts, faces, _, _ = marching_cubes(volume, level=threshold)
 
     mesh = o3d.geometry.TriangleMesh()
     mesh.vertices = o3d.utility.Vector3dVector(verts[:, ::-1])  # Swap Z,Y,X to X,Y,Z
     mesh.triangles = o3d.utility.Vector3iVector(faces)
-    #mesh.paint_uniform_color([0.8, 0.8, 0.8])  # Light gray
+    # mesh.paint_uniform_color([0.8, 0.8, 0.8])  # Light gray
     mesh.compute_vertex_normals()
-    
+
     visualizer.add_geometry(mesh)
     logging.info(f"Background mesh added with threshold at percentile {threshold_percentile}.")
+
 
 def setup_visualizer_options(visualizer, point_size=3.0, line_width=2.0):
     """Helper to apply common rendering options to a visualizer."""
     opt = visualizer.get_render_option()
     opt.background_color = np.asarray([0.30, 0.30, 0.30])  # Dark background
     opt.point_size = point_size
-    
+
     # Add a coordinate frame for reference
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=25.0, origin=[0, 0, 0])
     visualizer.add_geometry(coord_frame)
-    
+
     # Set initial camera view
     visualizer.get_view_control().set_zoom(0.8)
-    
+
     logging.info("Close the visualization window to continue script execution.")

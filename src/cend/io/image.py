@@ -5,7 +5,8 @@ from skimage.util import img_as_ubyte
 import logging
 
 # Configure basic logging
-logging.basicConfig(level=logging.INFO, format=' - %(message)s')
+logging.basicConfig(level=logging.INFO, format=" - %(message)s")
+
 
 def load_3d_volume(folder_path: str) -> np.ndarray:
     """
@@ -35,7 +36,6 @@ def load_3d_volume(folder_path: str) -> np.ndarray:
 
     except OSError as e:
         raise ValueError(f"Cannot access directory {folder_path}: {e}")
-
 
     # Load the first image to determine dimensions
     first_image_path = os.path.join(folder_path, tiff_files[0])
@@ -144,19 +144,18 @@ def show_stack_interactive(image_stack: np.ndarray, show_multiple=False):
             cv2.imshow(f"Slice {next_index} (Next)", image_stack[next_index])
         else:
             # Display a single window for the current image
-            cv2.imshow(f"Slice {index}/{num_images-1}", image_stack[index])
+            cv2.imshow(f"Slice {index}/{num_images - 1}", image_stack[index])
 
-    
         key = cv2.waitKey(0)
 
         # Close current windows before opening new ones
         cv2.destroyAllWindows()
 
-        if key == ord('q'):
+        if key == ord("q"):
             break
-        elif key == ord('d'):  # Move to the next image
+        elif key == ord("d"):  # Move to the next image
             index = (index + 1) % num_images
-        elif key == ord('a'):  # Move to the previous image
+        elif key == ord("a"):  # Move to the previous image
             index = (index - 1 + num_images) % num_images
 
     cv2.destroyAllWindows()

@@ -72,9 +72,7 @@ def process_image(args: Tuple):
 
     # 4. Skeletonization
     maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
-    skel_coords = df.generate_skel_from_seed(
-        maximas_set, root_coord, pressure_field, img_mask
-    )
+    skel_coords = df.generate_skel_from_seed(maximas_set, root_coord, pressure_field, img_mask)
     skel_img = create_maxima_image(skel_coords, volume.shape)
     clean_skel = skeletonize(skel_img)
     del img_mask, thrust_field, skel_img, skel_coords, maximas_set, df, volume
@@ -101,9 +99,7 @@ def process_image(args: Tuple):
 
         # If pruning removed the root, find a new one in the largest remaining component
         if not g.mst.has_node(g.root):
-            logging.warning(
-                f"Root {g.root} was removed during pruning. Finding a new root."
-            )
+            logging.warning(f"Root {g.root} was removed during pruning. Finding a new root.")
             if g.mst.number_of_nodes() == 0:
                 logging.error("Graph became empty after pruning. Skipping.")
                 return None
@@ -115,9 +111,7 @@ def process_image(args: Tuple):
             distances_to_original_root_sq = np.sum(
                 (nodes_in_component - np.array(root_coord)) ** 2, axis=1
             )
-            new_root = tuple(
-                nodes_in_component[np.argmin(distances_to_original_root_sq)]
-            )
+            new_root = tuple(nodes_in_component[np.argmin(distances_to_original_root_sq)])
 
             g.root = new_root
             logging.info(f"New root set to {new_root}")
@@ -242,9 +236,7 @@ def main():
 
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     data_dir = Path(args.data_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -307,9 +299,7 @@ def main():
         for task in tqdm(tasks, desc="Processing Images"):
             process_image(task)
     else:
-        logging.info(
-            f"Executing {len(tasks)} task(s) in parallel with {num_jobs} jobs."
-        )
+        logging.info(f"Executing {len(tasks)} task(s) in parallel with {num_jobs} jobs.")
         with Pool(processes=num_jobs) as pool:
             list(
                 tqdm(
