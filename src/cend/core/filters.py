@@ -285,7 +285,7 @@ def frangi_vesselness_vectorized(eigenvalues, alpha=0.5, beta=0.5, c=None):
     lambda3 = eigenvalues[..., 2]
 
     # Filtro de polaridade para vasos BRILHANTES em fundo escuro
-    # Em vasos brilhantes, a curvatura ortogonal (e2, e3) deve ser negativa [cite: 79]
+    # Em vasos brilhantes, a curvatura ortogonal (e2, e3) deve ser negativa
     # Se e2 ou e3 forem positivos, não é um tubo brilhante.
     condition_mask = (lambda2 < 0) & (lambda3 < 0)
 
@@ -324,6 +324,63 @@ def frangi_vesselness_vectorized(eigenvalues, alpha=0.5, beta=0.5, c=None):
     vesselness[~condition_mask] = 0
 
     return vesselness
+
+
+def yang_tubularity_vectorized(eigenvalues, alphas=[0.5, 0.5, 25.0], neuron_threshold=0.05):
+    """
+    Implementação vetorizada do filtro Yang (Yang et al. 2013).
+    Esperado eigenvalues shape: (N, 3) onde N é o número de voxels processados.
+    Ordenação esperada: lambda1 >= lambda2 >= lambda3 (por valor, não magnitude)
+
+    Para estruturas brilhantes tipo linha:
+    - lambda1 ≈ 0 (maior valor, próximo de zero)
+    - lambda2 < 0 (valor médio negativo)
+    - lambda3 < 0 (menor valor, mais negativo)
+    """
+    # Reordenar eigenvalues por valor (descendente) para Yang
+    # compute_hessian_eigenvalues_vectorized ordena por magnitude absoluta,
+    # mas Yang precisa de ordenação por valor
+    sort_indices = np.argsort(eigenvalues, axis=-1)[..., ::-1]
+    eigenvalues_sorted = np.take_along_axis(eigenvalues, sort_indices, axis=-1)
+
+    # Separação dos autovalores
+    lambda1 = eigenvalues_sorted[..., 0]
+    lambda2 = eigenvalues_sorted[..., 1]
+    lambda3 = eigenvalues_sorted[..., 2]
+
+    alphas = np.array(alphas)  # Coefficients from the reference paper
+
+    # Condições para estruturas brilhantes tipo linha:
+    # lambda1 próximo de zero, lambda2 e lambda3 negativos
+    condition_mask = (lambda2 < 0) & (lambda3 < 0) & (np.abs(lambda1) <= neuron_threshold)
+
+    # Soma dos quadrados dos eigenvalues (por voxel)
+    sum_lambda_sq = np.sum(np.square(eigenvalues_sorted), axis=-1)
+
+    # Evita divisão por zero
+    epsilon = 1e-10
+
+    # Máscara adicional para sum_lambda_sq != 0
+    valid_mask = condition_mask & (sum_lambda_sq > epsilon)
+
+    # Inicializa resultado com zeros
+    tubularity = np.zeros(eigenvalues_sorted.shape[0])
+
+    # Calcula apenas para voxels válidos
+    if np.any(valid_mask):
+        # f(u) from Equation 2 in Yang et al. paper
+        # k_factors shape: (N_valid, 3)
+        eigenvalues_valid = eigenvalues_sorted[valid_mask]
+        sum_lambda_sq_valid = sum_lambda_sq[valid_mask]
+
+        k_factors = np.exp(
+            -(np.square(eigenvalues_valid) / (2 * sum_lambda_sq_valid[:, np.newaxis]))
+        )
+
+        # Tubularidade: soma ponderada dos k_factors
+        tubularity[valid_mask] = np.sum(alphas * k_factors, axis=-1)
+
+    return tubularity
 
 
 def apply_tubular_filter(
@@ -377,8 +434,12 @@ def apply_tubular_filter(
     # 5. Cálculo Vetorizado (Fidelidade à Matemática Nova)
     eigenvalues = compute_hessian_eigenvalues_vectorized(hessian_masked)
 
-    if filter_type == "frangi" or filter_type == "yang":  # Assumindo Frangi como base
-        # Nota: Yang tem logica diferente, mas aqui focamos na fidelidade ao Frangi
+    if filter_type == "frangi":
+        results = frangi_vesselness_vectorized(eigenvalues, alpha=0.5, beta=0.5)
+    elif filter_type == "yang":
+        results = yang_tubularity_vectorized(eigenvalues, neuron_threshold=neuron_threshold)
+    else:
+        # Default para Frangi se tipo não reconhecido
         results = frangi_vesselness_vectorized(eigenvalues, alpha=0.5, beta=0.5)
 
     # 6. Mapear resultados de volta para o volume 3D

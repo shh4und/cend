@@ -76,7 +76,7 @@ def process_image(args: Tuple):
     img_grey_morpho = grey_morphological_denoising(img_filtered, struct_nonflat)
     zero_t = filter_type != "yang"  # Yang usa threshold iterativo, outros usam > 0
 
-    img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=zero_t)[0]
+    img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=True)[0]
     del img_filtered
     gc.collect()
     # del img_grey_morpho
@@ -237,7 +237,7 @@ def main():
     parser.add_argument(
         "--pruning_threshold",
         type=int,
-        default=0,
+        default=5,
         help="Maximum length (in nodes) of a branch to be pruned. Set to 0 to disable.",
     )
     parser.add_argument(

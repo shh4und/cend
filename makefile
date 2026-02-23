@@ -47,7 +47,7 @@ evaluate:
 		IMAGE_ID="OP_$${i}"; \
 		\
 		if [ -f "$$TEST_SWC" ]; then \
-			SCORE=$$(java -jar $(DIADEM_JAR) -G "$$GOLD_SWC" -T "$$TEST_SWC" -D 5 | grep 'Score:' | awk '{print $$2}' || echo "ERROR"); \
+			SCORE=$$(java -jar $(DIADEM_JAR) -G "$$GOLD_SWC" -T "$$TEST_SWC" -D 5 | grep 'Score:' | awk '{print $$2}' | tr ',' '.' || echo "ERROR"); \
 			\
 			if [ -f "$$META_FILE" ]; then \
 				SOURCE_IMG=$$(grep 'source_image:' "$$META_FILE" | awk '{print $$2}'); \
