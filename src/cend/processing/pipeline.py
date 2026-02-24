@@ -37,6 +37,8 @@ def process_image(args: Tuple):
         maximas_min_dist,
         smoothing_factor,
         num_points_per_branch,
+        grey_morpho_size,
+        grey_morpho_weight,
     ) = args
 
     logging.info(f"Processing image {img_idx + 1}: {img_path.name}")
@@ -59,13 +61,18 @@ def process_image(args: Tuple):
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-    size = 2
     y, x, z = np.ogrid[
-        -size // 2 : size // 2 + 1, -size // 2 : size // 2 + 1, -size // 2 : size // 2 + 1
+        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
+        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
+        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
     ]
-    # Uma superfície curva (valores negativos para as bordas)
-    struct_nonflat = (x**2 + y**2 + z**2) * -0.5
-    struct_nonflat[size // 2, size // 2, size // 2] = 0
+    # Create non-flat structure element (paraboloid)
+    struct_nonflat = (x**2 + y**2 + z**2) * np.negative(grey_morpho_weight)
+    struct_nonflat[grey_morpho_size // 2, grey_morpho_size // 2, grey_morpho_size // 2] = 0
+    # IMPORTANT: Normalize structure to have consistent range across different sizes
+    # This ensures different sizes have different effects
+    if struct_nonflat.min() != 0:
+        struct_nonflat = struct_nonflat / abs(struct_nonflat.min())
 
     img_filtered = img_filtered_o.copy()
 
@@ -73,10 +80,10 @@ def process_image(args: Tuple):
     if img_max > 0:
         img_filtered = img_filtered / img_max
 
+    # Apply grey morphological denoising
     img_grey_morpho = grey_morphological_denoising(img_filtered, struct_nonflat)
     zero_t = filter_type != "yang"  # Yang usa threshold iterativo, outros usam > 0
-
-    img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=True)[0]
+    img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=zero_t)[0]
     del img_filtered
     gc.collect()
     # del img_grey_morpho
@@ -166,8 +173,8 @@ def process_image(args: Tuple):
                 meta_file.write(f"sig_step: {sigma_range[2]}\n")
                 meta_file.write(f"neuron_threshold: {neuron_threshold}\n")
                 meta_file.write(f"pruning_threshold: {pruning_threshold}\n")
-                meta_file.write(f"smoothing_factor: {smoothing_factor}\n")
-                meta_file.write(f"num_points_per_branch: {num_points_per_branch}\n")
+                meta_file.write(f"grey_morpho_size: {grey_morpho_size}\n")
+                meta_file.write(f"grey_morpho_weight: {grey_morpho_weight}\n")
             logging.info(f"Metadata saved to {meta_filename}")
         except Exception as e:
             logging.error(f"Failed to save metadata file: {e}")
@@ -258,6 +265,18 @@ def main():
         default=15,
         help="Number of points per branch for smoothing.",
     )
+    parser.add_argument(
+        "--grey_morpho_size",
+        type=int,
+        default=2,
+        help="Size of grey morphological non-flat structure element",
+    )
+    parser.add_argument(
+        "--grey_morpho_weight",
+        type=int,
+        default=0.5,
+        help="Weight of grey morphological non-flat structure element",
+    )
 
     args = parser.parse_args()
 
@@ -310,6 +329,8 @@ def main():
                 args.maximas_min_dist,
                 args.smoothing_factor,
                 args.num_points_per_branch,
+                args.grey_morpho_size,
+                args.grey_morpho_weight,
             )
         )
 

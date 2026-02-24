@@ -21,7 +21,7 @@ INDICES       := $(shell seq 1 $(N_IMAGES))
 
 # --- CSV Header ---
 # The order of columns here must match the extraction order below.
-CSV_HEADER    := "ImageID,DiademScore,SourceImage,FilterType,SigMin,SigMax,SigStep,NeuronThreshold,PruningThreshold,SmoothingFactor,NumPointsPerBranch"
+CSV_HEADER    := "ImageID,DiademScore,SourceImage,FilterType,SigMin,SigMax,SigStep,NeuronThreshold,PruningThreshold,GreyStrElSize,GreyStrElWeight"
 
 # --- Main Targets ---
 
@@ -57,10 +57,10 @@ evaluate:
 				SIG_STEP=$$(grep 'sig_step:' "$$META_FILE" | awk '{print $$2}'); \
 				NEURON_THRESH=$$(grep 'neuron_threshold:' "$$META_FILE" | awk '{print $$2}'); \
 				PRUNING_THRESH=$$(grep 'pruning_threshold:' "$$META_FILE" | awk '{print $$2}'); \
-				SMOOTH_FACTOR=$$(grep 'smoothing_factor:' "$$META_FILE" | awk '{print $$2}'); \
-				NUM_POINTS=$$(grep 'num_points_per_branch:' "$$META_FILE" | awk '{print $$2}'); \
+				GREY_SE_SIZE=$$(grep 'grey_morpho_size:' "$$META_FILE" | awk '{print $$2}'); \
+				GREY_SE_WEIGHT=$$(grep 'grey_morpho_weight:' "$$META_FILE" | awk '{print $$2}'); \
 				\
-				CSV_LINE="$$IMAGE_ID,$$SCORE,$$SOURCE_IMG,$$FILTER_TYPE,$$SIG_MIN,$$SIG_MAX,$$SIG_STEP,$$NEURON_THRESH,$$PRUNING_THRESH,$$SMOOTH_FACTOR,$$NUM_POINTS"; \
+				CSV_LINE="$$IMAGE_ID,$$SCORE,$$SOURCE_IMG,$$FILTER_TYPE,$$SIG_MIN,$$SIG_MAX,$$SIG_STEP,$$NEURON_THRESH,$$PRUNING_THRESH,$$GREY_SE_SIZE,$$GREY_SE_WEIGHT"; \
 			else \
 				CSV_LINE="$$IMAGE_ID,$$SCORE,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND"; \
 			fi; \
