@@ -411,9 +411,9 @@ def apply_tubular_filter(
     # Otimização Geométrica Original: Trace < 0 para estruturas brilhantes.
     trace = Hxx + Hyy + Hzz
 
-    # Se o threshold for muito restritivo na entrada, use volume > 0
     # Aqui usamos uma máscara para vetorizar apenas o necessário
-    mask = (volume > neuron_threshold) & (trace < 0)
+
+    mask = (volume > 0) & (trace < 0)
 
     # Se a máscara estiver vazia, retorna tudo zero
     if not np.any(mask):

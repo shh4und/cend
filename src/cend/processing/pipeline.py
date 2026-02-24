@@ -67,12 +67,16 @@ def process_image(args: Tuple):
         -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
     ]
     # Create non-flat structure element (paraboloid)
-    struct_nonflat = (x**2 + y**2 + z**2) * np.negative(grey_morpho_weight)
+    # Normalize spatial distances FIRST (makes different sizes comparable, range [0, 1])
+    # then apply weight AFTER so it is preserved in the final structure.
+    # Previously, dividing by abs(min) was equivalent to dividing by (max_dist_sq * weight),
+    # which caused the weight to cancel out algebraically, making all weights produce the same result.
+    dist_sq = (x**2 + y**2 + z**2).astype(float)
+    max_dist_sq = dist_sq.max()
+    if max_dist_sq > 0:
+        dist_sq = dist_sq / max_dist_sq  # normalize to [0, 1] based on size alone
+    struct_nonflat = -dist_sq * grey_morpho_weight  # weight now controls paraboloid depth
     struct_nonflat[grey_morpho_size // 2, grey_morpho_size // 2, grey_morpho_size // 2] = 0
-    # IMPORTANT: Normalize structure to have consistent range across different sizes
-    # This ensures different sizes have different effects
-    if struct_nonflat.min() != 0:
-        struct_nonflat = struct_nonflat / abs(struct_nonflat.min())
 
     img_filtered = img_filtered_o.copy()
 
@@ -273,7 +277,7 @@ def main():
     )
     parser.add_argument(
         "--grey_morpho_weight",
-        type=int,
+        type=float,
         default=0.5,
         help="Weight of grey morphological non-flat structure element",
     )
