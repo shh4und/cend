@@ -41,13 +41,13 @@ def multiscale_filtering(
     """
     volume = img_as_float(volume)
 
-    # sigma_min, sigma_max, sigma_step = sigma_range
-    # sigmas = np.arange(sigma_min, sigma_max + sigma_step, sigma_step)
-    # if not sigmas.size:
-    #     sigmas = np.array([sigma_min], dtype=float)
+    sigma_min, sigma_max, sigma_step = sigma_range
+    sigmas = np.arange(sigma_min, sigma_max + sigma_step, sigma_step)
+    if not sigmas.size:
+        sigmas = np.array([sigma_min], dtype=float)
 
     max_response_volume = np.zeros_like(volume, dtype=float)
-    sigmas = [1.0, 1.5, 2.25, 3.37]
+    # sigmas = [1.0, 1.5, 2.25, 3.37]
     logger.info(
         f"OP_{dataset_number}: Starting Multiscale Filtering with {filter_type}'s approach."
     )

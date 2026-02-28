@@ -9,12 +9,12 @@ import networkx as nx
 import numpy as np
 from scipy import ndimage as ndi
 from skimage.morphology import skeletonize
+from skimage.util import img_as_ubyte
 from tqdm import tqdm
 
 from ..core.distance_fields import DistanceFields
 from ..core.segmentation import (
     adaptive_mean_mask,
-    grey_morphological_denoising,
 )
 from ..core.skeletonization import generate_skeleton_from_seed
 from ..core.vector_fields import create_maxima_image
@@ -46,12 +46,12 @@ def process_image(args: Tuple):
     # 1. Load Image
     volume = load_3d_volume(str(img_path))
 
-    # 2. Pre-processing
-    gauss_filtered = ndi.gaussian_filter(volume, 1.0)
-    min_filtered = ndi.minimum_filter(gauss_filtered, 2)
-    volume[min_filtered == 0] = 0
-    del gauss_filtered, min_filtered
-    gc.collect()
+    # 2. Pre-processing: Gaussian smoothing + grey erosion with non-flat strel
+    from cend.core.segmentation import strel_non_flat_sphere
+
+    struct_nonflat = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
+    volume = ndi.gaussian_filter(volume, 2.0)
+    volume = ndi.grey_erosion(volume, structure=struct_nonflat)
 
     # 3. Filtering and Segmentation
     img_filtered_o = multiscale_filtering(
@@ -61,22 +61,6 @@ def process_image(args: Tuple):
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-    y, x, z = np.ogrid[
-        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
-        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
-        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
-    ]
-    # Create non-flat structure element (paraboloid)
-    # Normalize spatial distances FIRST (makes different sizes comparable, range [0, 1])
-    # then apply weight AFTER so it is preserved in the final structure.
-    # Previously, dividing by abs(min) was equivalent to dividing by (max_dist_sq * weight),
-    # which caused the weight to cancel out algebraically, making all weights produce the same result.
-    dist_sq = (x**2 + y**2 + z**2).astype(float)
-    max_dist_sq = dist_sq.max()
-    if max_dist_sq > 0:
-        dist_sq = dist_sq / max_dist_sq  # normalize to [0, 1] based on size alone
-    struct_nonflat = -dist_sq * grey_morpho_weight  # weight now controls paraboloid depth
-    struct_nonflat[grey_morpho_size // 2, grey_morpho_size // 2, grey_morpho_size // 2] = 0
 
     img_filtered = img_filtered_o.copy()
 
@@ -84,25 +68,22 @@ def process_image(args: Tuple):
     if img_max > 0:
         img_filtered = img_filtered / img_max
 
+    img_filtered = img_as_ubyte(img_filtered)
     # Apply grey morphological denoising
-    img_grey_morpho = grey_morphological_denoising(img_filtered, struct_nonflat)
+    # img_grey_morpho = ndi.grey_erosion(img_filtered, structure=struct_nonflat)
     zero_t = filter_type != "yang"  # Yang usa threshold iterativo, outros usam > 0
-    img_mask = adaptive_mean_mask(img_grey_morpho, zero_t=zero_t)[0]
+    img_filtered = ndi.grey_closing(img_filtered, size=(7, 7, 7))
+    img_mask = adaptive_mean_mask(img_filtered, zero_t=zero_t)[0]
     del img_filtered
     gc.collect()
-    # del img_grey_morpho
-    # gc.collect()
-    # clean_img_mask = morphological_denoising(img_mask)
     # 4. Distance Fields
     df = DistanceFields(
         shape=volume.shape,
         seed_point=root_coord,
         dataset_number=img_idx + 1,
     )
-    pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 2.0)
+    pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 1.0)
     thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 1.0)
-    # del img_mask
-    gc.collect()
 
     # 4. Skeletonization
     maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
