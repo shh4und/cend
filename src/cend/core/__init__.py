@@ -4,10 +4,7 @@ from .distance_fields import DistanceFields
 from .filters import (
     apply_tubular_filter,
     compute_hessian_eigenvalues,
-    frangi_vesselness,
     kumar_vesselness,
-    sato_tubularity,
-    yang_tubularity,
 )
 from .segmentation import (
     adaptive_mean_mask,
@@ -18,15 +15,13 @@ from .segmentation import (
     morphological_denoising,
 )
 from .skeletonization import generate_skeleton_from_seed
+from .utils import create_maxima_image, local_maxima_3d, strel_non_flat_sphere
 
 __all__ = [
     "DistanceFields",
     "apply_tubular_filter",
     "compute_hessian_eigenvalues",
-    "frangi_vesselness",
     "kumar_vesselness",
-    "yang_tubularity",
-    "sato_tubularity",
     "adaptive_mean_mask",
     "apply_mask",
     "morphological_denoising",
@@ -34,4 +29,7 @@ __all__ = [
     "gradient_magnitude",
     "boundary_voxels",
     "generate_skeleton_from_seed",
+    "strel_non_flat_sphere",
+    "create_maxima_image",
+    "local_maxima_3d",
 ]

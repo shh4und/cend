@@ -150,25 +150,3 @@ def boundary_voxels(volume: np.ndarray) -> np.ndarray:
     struct_element = ndi.generate_binary_structure(rank=3, connectivity=3)
     eroded_mask = ndi.binary_erosion(mask, structure=struct_element)
     return mask ^ eroded_mask
-
-
-def strel_non_flat_sphere(grey_morpho_weight=0.5, grey_morpho_size=2):
-
-    y, x, z = np.ogrid[
-        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
-        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
-        -grey_morpho_size // 2 : grey_morpho_size // 2 + 1,
-    ]
-    # Create non-flat structure element (paraboloid)
-    # Normalize spatial distances FIRST (makes different sizes comparable, range [0, 1])
-    # then apply weight AFTER so it is preserved in the final structure.
-    # Previously, dividing by abs(min) was equivalent to dividing by (max_dist_sq * weight),
-    # which caused the weight to cancel out algebraically, making all weights produce the same result.
-    dist_sq = (x**2 + y**2 + z**2).astype(float)
-    max_dist_sq = dist_sq.max()
-    if max_dist_sq > 0:
-        dist_sq = dist_sq / max_dist_sq  # normalize to [0, 1] based on size alone
-    struct_nonflat = -dist_sq * grey_morpho_weight  # weight now controls paraboloid depth
-    struct_nonflat[grey_morpho_size // 2, grey_morpho_size // 2, grey_morpho_size // 2] = 0
-
-    return struct_nonflat

@@ -16,11 +16,10 @@ class Graph:
 
     The main workflow is:
     1. Initialize with an image and a root voxel.
-    2. Efficiently create the graph starting from the root.
+    2. Efficiently create the graph starting from the root (BFS).
     3. Compute the Minimum Spanning Tree (MST).
-    4. Optionally, prune short branches from the MST.
-    5. Label the MST nodes for the SWC format.
-    6. Save the result to an .swc file, with optional smoothing.
+    4. Optionally, prune short branches and reroot via ``prune_and_reroot``.
+    5. Save the smoothed result to an SWC file via ``generate_smoothed_swc``.
     """
 
     def __init__(self, image: np.ndarray, root_voxel: Tuple[int, int, int]):
@@ -46,7 +45,6 @@ class Graph:
         self.graph = nx.Graph()
         self.mst: Optional[nx.Graph] = None
 
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
         self.logger = logging.getLogger(self.__class__.__name__)
 
         self.logger.info("Starting graph creation from the root...")
@@ -143,70 +141,42 @@ class Graph:
             self.mst.remove_nodes_from(list(nodes_to_remove))
             self.logger.info(f"MST pruning complete. {len(nodes_to_remove)} nodes removed.")
 
-    def validate_and_set_root(self, original_root: Tuple[int, int, int]) -> None:
+    def prune_and_reroot(self, length_threshold: int, original_root: Tuple[int, int, int]) -> bool:
         """
-        Verifies if the original root is a node in the graph. If not, finds the
-        closest node and updates self.root.
+        Prunes short branches from the MST and updates the root if it was removed.
+
+        If pruning eliminates the current root, this method finds the node in the
+        largest remaining component that is closest to ``original_root`` and sets
+        it as the new root.
 
         Args:
-            original_root (Tuple[int, int, int]): The coordinate of the original root.
+            length_threshold: Maximum number of nodes in a branch to be pruned.
+                              No pruning is performed when <= 0.
+            original_root: The original (pre-pruning) root coordinate used as
+                           a reference when a new root must be chosen.
+
+        Returns:
+            True if the MST is non-empty after pruning, False otherwise.
         """
-        if self.graph.has_node(original_root):
-            self.root = original_root
-            self.logger.info(f"Original root {original_root} is valid and present in the graph.")
-            return
+        if length_threshold <= 0:
+            return True
 
-        self.logger.warning(
-            f"Original root {original_root} not found in skeleton. Finding the closest node..."
-        )
+        self.prune_mst_by_length(length_threshold)
 
-        nodes = np.array(list(self.graph.nodes()))
-        # Calculate squared Euclidean distance from all nodes to the original root
-        distances_sq = np.sum(
-            (nodes - np.array(original_root)) ** 2, axis=1
-        )  # BUG FIX: Added axis=1
+        if self.mst.number_of_nodes() == 0:
+            self.logger.error("Graph became empty after pruning.")
+            return False
 
-        # Find the index of the node with the minimum distance
-        closest_node_index = np.argmin(distances_sq)
-        new_root = tuple(nodes[closest_node_index])
+        if self.mst.has_node(self.root):
+            return True
 
-        self.root = new_root
-        self.logger.info(f"Root updated to the closest node: {self.root}")
-
-    def label_nodes_for_swc(self) -> None:
-        """
-        Performs a Depth-First Search (DFS) on the MST to label nodes with
-        'id' and 'parent_id', preparing for the SWC format.
-        """
-        if not self.mst:
-            self.logger.warning("MST must be calculated first. Call `calculate_mst()`.")
-            return
-
-        self.logger.info("Labeling nodes via DFS...")
-        visited = set()
-        stack = [(self.root, -1)]  # The stack contains (voxel, parent_id)
-        node_id_counter = 1
-
-        while stack:
-            voxel, parent_id = stack.pop()
-            if voxel not in visited:
-                visited.add(voxel)
-
-                # Ensure the node still exists in the MST after pruning
-                if self.mst.has_node(voxel):
-                    if "id" not in self.mst.nodes[voxel]:
-                        self.mst.nodes[voxel]["id"] = node_id_counter
-                        node_id_counter += 1
-
-                    self.mst.nodes[voxel]["parent"] = parent_id
-
-                    # Add neighbors to the stack
-                    current_node_id = self.mst.nodes[voxel]["id"]
-                    for neighbor in list(self.mst.neighbors(voxel)):
-                        if neighbor not in visited:
-                            stack.append((neighbor, current_node_id))
-
-        self.logger.info("Node labeling complete.")
+        self.logger.warning(f"Root {self.root} was removed during pruning. Finding a new root.")
+        main_component = max(nx.connected_components(self.mst), key=len)
+        nodes = np.array(list(main_component))
+        distances_sq = np.sum((nodes - np.array(original_root)) ** 2, axis=1)
+        self.root = tuple(nodes[np.argmin(distances_sq)])
+        self.logger.info(f"New root set to {self.root}")
+        return True
 
     def generate_smoothed_swc(
         self,
@@ -299,47 +269,6 @@ class Graph:
                 # Update map with the ID of the last point of the branch
                 voxel_to_id_map[path[-1]] = parent_id
 
-        return swc.write_file()
-
-    def save_to_swc(self, filename: str, pressure_field: Optional[np.ndarray] = None) -> bool:
-        """
-        Saves the labeled MST to an SWC format file.
-
-        Args:
-            filename (str): The output filename (e.g., 'neuron.swc').
-            pressure_field (np.ndarray, optional): A 3D field with radius information.
-
-        Returns:
-            bool: True if the file was saved successfully.
-        """
-        if not self.mst:
-            self.logger.warning("No MST to save.")
-            return False
-
-        swc = SWCFile(filename)
-
-        # Sort nodes by ID for a well-formatted SWC file
-        nodes_sorted = sorted(self.mst.nodes(data=True), key=lambda x: x[1].get("id", float("inf")))
-
-        for node, attrs in nodes_sorted:
-            if "id" not in attrs:
-                continue
-
-            z, y, x = map(float, node)
-            radius = 1.0  # Default radius
-
-            if pressure_field is not None:
-                iz, iy, ix = int(z), int(y), int(x)
-                if (
-                    0 <= iz < pressure_field.shape[0]
-                    and 0 <= iy < pressure_field.shape[1]
-                    and 0 <= ix < pressure_field.shape[2]
-                ):
-                    radius = max(1.0, pressure_field[iz, iy, ix])
-
-            swc.add_point(attrs["id"], 2, x, y, z, radius, attrs.get("parent", -1))
-
-        self.logger.info(f"Saving MST to {filename}")
         return swc.write_file()
 
     # --- HELPER METHODS ---

@@ -5,7 +5,6 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import Tuple
 
-import networkx as nx
 import numpy as np
 from scipy import ndimage as ndi
 from skimage.util import img_as_ubyte
@@ -14,11 +13,9 @@ from tqdm import tqdm
 from cend.core import grey_morphological_denoising
 
 from ..core.distance_fields import DistanceFields
-from ..core.segmentation import (
-    adaptive_mean_mask,
-)
+from ..core.segmentation import adaptive_mean_mask
 from ..core.skeletonization import generate_skeleton_from_seed
-from ..core.vector_fields import create_maxima_image
+from ..core.utils import create_maxima_image, strel_non_flat_sphere
 from ..io.image import load_3d_volume
 from ..structures.graph import Graph
 from .multiscale import multiscale_filtering, multiscale_on_distance
@@ -44,52 +41,43 @@ def process_image(args: Tuple):
 
     logging.info(f"Processing image {img_idx + 1}: {img_path.name}")
 
-    # 1. Load Image
+    # 1. Load image
     volume = load_3d_volume(str(img_path))
 
-    # 2. Pre-processing: Gaussian smoothing + grey erosion with non-flat strel
-    from cend.core.segmentation import strel_non_flat_sphere
-
+    # 2. Pre-processing: Gaussian smoothing + grey morphological denoising
     struct_nonflat = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
     volume = ndi.gaussian_filter(volume, 1.0)
     volume = grey_morphological_denoising(img_as_ubyte(volume), struct_nonflat)
 
-    # 3. Filtering and Segmentation
-    img_filtered_o = multiscale_filtering(
+    # 3. Filtering: multi-scale tubularity on the raw volume
+    img_filtered = multiscale_filtering(
         volume=volume,
         sigma_range=sigma_range,
         filter_type=filter_type,
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-
-    img_filtered = img_filtered_o.copy()
-
     img_max = img_filtered.max()
     if img_max > 0:
         img_filtered = img_filtered / img_max
-
     img_filtered = img_as_ubyte(img_filtered)
-    # Apply grey morphological denoising
-    # img_grey_morpho = ndi.grey_erosion(img_filtered, structure=struct_nonflat)
-    zero_t = filter_type != "yang"  # Yang usa threshold iterativo, outros usam > 0
-    struct_nonflat_2 = strel_non_flat_sphere(0.5, 4)
-    # img_grey_morpho_dn = grey_morphological_denoising(img_filtered, struct_nonflat)
-    # img_grey_morpho_er = ndi.grey_erosion(input=img_filtered, structure=struct_nonflat_2)
 
-    img_grey_morpho_cl = ndi.grey_closing(input=img_filtered, structure=struct_nonflat_2)
+    # 4. Segmentation: second filtering pass on a morphologically-closed response
+    struct_nonflat_2 = strel_non_flat_sphere(0.5, 4)
+    img_closed = ndi.grey_closing(input=img_filtered, structure=struct_nonflat_2)
     img_filtered_2 = multiscale_on_distance(
-        volume=img_grey_morpho_cl,
+        volume=img_closed,
         sigma_range=(1, 4.75, 1.5),
         filter_type=filter_type,
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-    # img_filtered_cl = ndi.grey_closing(img_filtered_er, structure=struct_nonflat_2)
+    zero_t = filter_type != "yang"  # Yang uses iterative threshold; others threshold at > 0
     img_mask = adaptive_mean_mask(np.maximum(img_filtered_2, img_filtered), zero_t=zero_t)[0]
-    del img_filtered, img_grey_morpho_cl
+    del img_filtered, img_closed
     gc.collect()
-    # 4. Distance Fields
+
+    # 5. Distance fields
     df = DistanceFields(
         shape=volume.shape,
         seed_point=root_coord,
@@ -98,7 +86,7 @@ def process_image(args: Tuple):
     pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 1.0)
     thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 2.0)
 
-    # 4. Skeletonization
+    # 6. Skeletonization
     maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
     skel_coords = generate_skeleton_from_seed(
         maximas_set, root_coord, pressure_field, img_mask, volume.shape, img_idx + 1
@@ -111,7 +99,7 @@ def process_image(args: Tuple):
         logging.error(f"Empty skeleton for image {img_idx + 1}. Skipping.")
         return None
 
-    # Find the closest point on the skeleton to the initial root coordinate
+    # Find the closest skeleton point to the original root coordinate
     skel_points = np.argwhere(clean_skel)
     distances_sq = np.sum((skel_points - np.array(root_coord)) ** 2, axis=1)
     initial_valid_root = tuple(skel_points[np.argmin(distances_sq)])
@@ -122,30 +110,12 @@ def process_image(args: Tuple):
 
     g.calculate_mst()
 
-    # 5. Pruning and Root Validation
-    if pruning_threshold > 0:
-        g.prune_mst_by_length(pruning_threshold)
+    # 7. Pruning and root validation
+    if not g.prune_and_reroot(pruning_threshold, root_coord):
+        logging.error(f"Graph became empty after pruning for image {img_idx + 1}. Skipping.")
+        return None
 
-        # If pruning removed the root, find a new one in the largest remaining component
-        if not g.mst.has_node(g.root):
-            logging.warning(f"Root {g.root} was removed during pruning. Finding a new root.")
-            if g.mst.number_of_nodes() == 0:
-                logging.error("Graph became empty after pruning. Skipping.")
-                return None
-
-            main_component = max(nx.connected_components(g.mst), key=len)
-
-            # Find the node in the main component closest to the original root
-            nodes_in_component = np.array(list(main_component))
-            distances_to_original_root_sq = np.sum(
-                (nodes_in_component - np.array(root_coord)) ** 2, axis=1
-            )
-            new_root = tuple(nodes_in_component[np.argmin(distances_to_original_root_sq)])
-
-            g.root = new_root
-            logging.info(f"New root set to {new_root}")
-
-    # 6. Smooth the tree and save the SWC file
+    # 8. Smooth the tree and save the SWC file
     output_filename = output_dir / f"OP_{img_idx + 1}_reconstruction.swc"
     success = g.generate_smoothed_swc(
         str(output_filename),
@@ -158,28 +128,48 @@ def process_image(args: Tuple):
 
     if success:
         logging.info(f"Image {img_idx + 1} successfully saved to {output_filename}")
-
-        # Save a metadata file alongside the SWC
-        meta_filename = output_filename.with_suffix(".meta")
-        try:
-            with open(meta_filename, "w") as meta_file:
-                meta_file.write(f"source_image: {img_path.name}\n")
-                meta_file.write(f"filter_type: {filter_type}\n")
-                meta_file.write(f"sig_min: {sigma_range[0]}\n")
-                meta_file.write(f"sig_max: {sigma_range[1]}\n")
-                meta_file.write(f"sig_step: {sigma_range[2]}\n")
-                meta_file.write(f"neuron_threshold: {neuron_threshold}\n")
-                meta_file.write(f"pruning_threshold: {pruning_threshold}\n")
-                meta_file.write(f"grey_morpho_size: {grey_morpho_size}\n")
-                meta_file.write(f"grey_morpho_weight: {grey_morpho_weight}\n")
-            logging.info(f"Metadata saved to {meta_filename}")
-        except Exception as e:
-            logging.error(f"Failed to save metadata file: {e}")
-
+        _save_metadata(
+            output_filename,
+            img_path,
+            filter_type,
+            sigma_range,
+            neuron_threshold,
+            pruning_threshold,
+            grey_morpho_size,
+            grey_morpho_weight,
+        )
         return str(output_filename)
     else:
         logging.error(f"Failed to save SWC file for image {img_idx + 1}.")
         return None
+
+
+def _save_metadata(
+    swc_path: Path,
+    img_path: Path,
+    filter_type: str,
+    sigma_range: Tuple,
+    neuron_threshold: float,
+    pruning_threshold: int,
+    grey_morpho_size: int,
+    grey_morpho_weight: float,
+) -> None:
+    """Writes a .meta sidecar file alongside a generated SWC file."""
+    meta_path = swc_path.with_suffix(".meta")
+    try:
+        with open(meta_path, "w") as f:
+            f.write(f"source_image: {img_path.name}\n")
+            f.write(f"filter_type: {filter_type}\n")
+            f.write(f"sig_min: {sigma_range[0]}\n")
+            f.write(f"sig_max: {sigma_range[1]}\n")
+            f.write(f"sig_step: {sigma_range[2]}\n")
+            f.write(f"neuron_threshold: {neuron_threshold}\n")
+            f.write(f"pruning_threshold: {pruning_threshold}\n")
+            f.write(f"grey_morpho_size: {grey_morpho_size}\n")
+            f.write(f"grey_morpho_weight: {grey_morpho_weight}\n")
+        logging.info(f"Metadata saved to {meta_path}")
+    except Exception as e:
+        logging.error(f"Failed to save metadata file: {e}")
 
 
 def main():
