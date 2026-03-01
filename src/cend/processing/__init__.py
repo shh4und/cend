@@ -3,4 +3,4 @@
 from .multiscale import multiscale_filtering
 from .pipeline import main, process_image
 
-__all__ = ["multiscale_filtering", "process_image", "main"]
+__all__ = ["multiscale_filtering", "multiscale_on_distance", "process_image", "main"]

@@ -8,9 +8,10 @@ from typing import Tuple
 import networkx as nx
 import numpy as np
 from scipy import ndimage as ndi
-from skimage.morphology import skeletonize
 from skimage.util import img_as_ubyte
 from tqdm import tqdm
+
+from cend.core import grey_morphological_denoising
 
 from ..core.distance_fields import DistanceFields
 from ..core.segmentation import (
@@ -20,7 +21,7 @@ from ..core.skeletonization import generate_skeleton_from_seed
 from ..core.vector_fields import create_maxima_image
 from ..io.image import load_3d_volume
 from ..structures.graph import Graph
-from .multiscale import multiscale_filtering
+from .multiscale import multiscale_filtering, multiscale_on_distance
 
 
 def process_image(args: Tuple):
@@ -50,8 +51,8 @@ def process_image(args: Tuple):
     from cend.core.segmentation import strel_non_flat_sphere
 
     struct_nonflat = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
-    volume = ndi.gaussian_filter(volume, 2.0)
-    volume = ndi.grey_erosion(volume, structure=struct_nonflat)
+    volume = ndi.gaussian_filter(volume, 1.0)
+    volume = grey_morphological_denoising(img_as_ubyte(volume), struct_nonflat)
 
     # 3. Filtering and Segmentation
     img_filtered_o = multiscale_filtering(
@@ -72,9 +73,21 @@ def process_image(args: Tuple):
     # Apply grey morphological denoising
     # img_grey_morpho = ndi.grey_erosion(img_filtered, structure=struct_nonflat)
     zero_t = filter_type != "yang"  # Yang usa threshold iterativo, outros usam > 0
-    img_filtered = ndi.grey_closing(img_filtered, size=(7, 7, 7))
-    img_mask = adaptive_mean_mask(img_filtered, zero_t=zero_t)[0]
-    del img_filtered
+    struct_nonflat_2 = strel_non_flat_sphere(0.5, 4)
+    # img_grey_morpho_dn = grey_morphological_denoising(img_filtered, struct_nonflat)
+    # img_grey_morpho_er = ndi.grey_erosion(input=img_filtered, structure=struct_nonflat_2)
+
+    img_grey_morpho_cl = ndi.grey_closing(input=img_filtered, structure=struct_nonflat_2)
+    img_filtered_2 = multiscale_on_distance(
+        volume=img_grey_morpho_cl,
+        sigma_range=(1, 4.75, 1.5),
+        filter_type=filter_type,
+        neuron_threshold=neuron_threshold,
+        dataset_number=img_idx + 1,
+    )
+    # img_filtered_cl = ndi.grey_closing(img_filtered_er, structure=struct_nonflat_2)
+    img_mask = adaptive_mean_mask(np.maximum(img_filtered_2, img_filtered), zero_t=zero_t)[0]
+    del img_filtered, img_grey_morpho_cl
     gc.collect()
     # 4. Distance Fields
     df = DistanceFields(
@@ -83,16 +96,15 @@ def process_image(args: Tuple):
         dataset_number=img_idx + 1,
     )
     pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 1.0)
-    thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 1.0)
+    thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 2.0)
 
     # 4. Skeletonization
     maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
     skel_coords = generate_skeleton_from_seed(
         maximas_set, root_coord, pressure_field, img_mask, volume.shape, img_idx + 1
     )
-    skel_img = create_maxima_image(skel_coords, volume.shape)
-    clean_skel = skeletonize(skel_img)
-    del img_mask, thrust_field, skel_img, skel_coords, maximas_set, df, volume
+    clean_skel = create_maxima_image(skel_coords, volume.shape)
+    del img_mask, thrust_field, skel_coords, maximas_set, df, volume
     gc.collect()
 
     if not np.any(clean_skel):
