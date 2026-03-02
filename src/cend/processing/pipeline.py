@@ -10,12 +10,15 @@ from scipy import ndimage as ndi
 from skimage.util import img_as_ubyte
 from tqdm import tqdm
 
-from cend.core import grey_morphological_denoising
-
 from ..core.distance_fields import DistanceFields
 from ..core.segmentation import adaptive_mean_mask
 from ..core.skeletonization import generate_skeleton_from_seed
-from ..core.utils import create_maxima_image, strel_non_flat_sphere
+from ..core.utils import (
+    compute_tubular_direction,
+    create_maxima_image,
+    find_pseudo_distance_maxima,
+    strel_non_flat_sphere,
+)
 from ..io.image import load_3d_volume
 from ..structures.graph import Graph
 from .multiscale import multiscale_filtering, multiscale_on_distance
@@ -44,12 +47,10 @@ def process_image(args: Tuple):
     # 1. Load image
     volume = load_3d_volume(str(img_path))
 
-    # 2. Pre-processing: Gaussian smoothing + grey morphological denoising
-    struct_nonflat = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
+    # 2. Pre-processing: light Gaussian smoothing only (no grey morphology here)
     volume = ndi.gaussian_filter(volume, 1.0)
-    volume = grey_morphological_denoising(img_as_ubyte(volume), struct_nonflat)
 
-    # 3. Filtering: multi-scale tubularity on the raw volume
+    # 3. Filtering: multi-scale tubularity on the smoothed raw volume
     img_filtered = multiscale_filtering(
         volume=volume,
         sigma_range=sigma_range,
@@ -57,27 +58,47 @@ def process_image(args: Tuple):
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
+
+    # 4. Post-filtering morphology on float response (professor's key suggestion)
+    #    Normalise to [0, 1] and apply non-flat erosion + closing on continuous data.
+    #    The non-flat erosion with a parabolic SE approximates a distance transform:
+    #    ridges of the resulting map align with tube centres.
     img_max = img_filtered.max()
     if img_max > 0:
-        img_filtered = img_filtered / img_max
+        img_filtered /= img_max
     img_filtered = img_as_ubyte(img_filtered)
+    struct_erosion = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
+    img_filtered = ndi.grey_erosion(img_filtered, structure=struct_erosion)
 
-    # 4. Segmentation: second filtering pass on a morphologically-closed response
-    struct_nonflat_2 = strel_non_flat_sphere(0.5, 4)
-    img_closed = ndi.grey_closing(input=img_filtered, structure=struct_nonflat_2)
+    # Non-flat closing (preserves tubular geometry better than a flat cube)
+    struct_closing = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
+    img_filtered = ndi.grey_closing(img_filtered, structure=struct_closing)
+
+    # Keep a copy of the continuous pseudo-distance map before quantising
+    pseudo_distance = img_filtered.copy()
+
+    # 5. Second-stage filtering: Hessian on the pseudo-distance map
+    #    A narrower scale range picks up residual tubularity in the smoothed
+    #    distance-like field, which is more robust in low-signal regions.
     img_filtered_2 = multiscale_on_distance(
-        volume=img_closed,
+        volume=img_filtered,
         sigma_range=(1, 4.75, 1.5),
         filter_type=filter_type,
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
     )
-    zero_t = filter_type != "yang"  # Yang uses iterative threshold; others threshold at > 0
-    img_mask = adaptive_mean_mask(np.maximum(img_filtered_2, img_filtered), zero_t=zero_t)[0]
-    del img_filtered, img_closed
+
+    # Combine both responses (max) — the first pass catches strong neurites,
+    # the second pass recovers weak/thin ones via the distance-like field.
+    combined = np.maximum(img_filtered, img_filtered_2)
+
+    # 6. Segmentation: adaptive threshold on the combined response
+    zero_t = filter_type != "yang"
+    img_mask = adaptive_mean_mask(img_as_ubyte(combined), zero_t=zero_t)[0]
+    del img_filtered_2, combined
     gc.collect()
 
-    # 5. Distance fields
+    # 7. Distance fields
     df = DistanceFields(
         shape=volume.shape,
         seed_point=root_coord,
@@ -86,13 +107,38 @@ def process_image(args: Tuple):
     pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 1.0)
     thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 2.0)
 
-    # 6. Skeletonization
-    maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
+    # 8. Seed finding: combine thrust maxima with pseudo-distance maxima
+    #    Thrust maxima find endpoints; pseudo-distance maxima find medial-axis
+    #    points that may be missed by thrust alone (reduces false seeds near
+    #    irregular borders).
+    thrust_seeds = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
+    pd_seeds = find_pseudo_distance_maxima(
+        pseudo_distance, img_mask, order=maximas_min_dist, min_value=0.05
+    )
+    maximas_set = (
+        np.unique(np.vstack([thrust_seeds, pd_seeds]), axis=0) if pd_seeds.size else thrust_seeds
+    )
+
+    # 9. Compute tubular directions from pseudo-distance Hessian for tracing guidance
+    tubular_dirs = compute_tubular_direction(pseudo_distance, sigma=1.5)
+
+    # 10. Skeletonization with enhanced Dijkstra cost
     skel_coords = generate_skeleton_from_seed(
-        maximas_set, root_coord, pressure_field, img_mask, volume.shape, img_idx + 1
+        maximas_set,
+        root_coord,
+        pressure_field,
+        img_mask,
+        volume.shape,
+        img_idx + 1,
+        pseudo_distance=pseudo_distance,
+        tubular_directions=tubular_dirs,
+        alpha_pressure=1.0,
+        alpha_distance=0.3,
+        alpha_direction=0.7,
     )
     clean_skel = create_maxima_image(skel_coords, volume.shape)
     del img_mask, thrust_field, skel_coords, maximas_set, df, volume
+    del pseudo_distance, tubular_dirs, img_filtered
     gc.collect()
 
     if not np.any(clean_skel):
@@ -231,7 +277,7 @@ def main():
     parser.add_argument(
         "--pruning_threshold",
         type=int,
-        default=5,
+        default=10,
         help="Maximum length (in nodes) of a branch to be pruned. Set to 0 to disable.",
     )
     parser.add_argument(
@@ -249,7 +295,7 @@ def main():
     parser.add_argument(
         "--num_points_per_branch",
         type=int,
-        default=15,
+        default=20,
         help="Number of points per branch for smoothing.",
     )
     parser.add_argument(

@@ -15,7 +15,13 @@ from .segmentation import (
     morphological_denoising,
 )
 from .skeletonization import generate_skeleton_from_seed
-from .utils import create_maxima_image, local_maxima_3d, strel_non_flat_sphere
+from .utils import (
+    compute_tubular_direction,
+    create_maxima_image,
+    find_pseudo_distance_maxima,
+    local_maxima_3d,
+    strel_non_flat_sphere,
+)
 
 __all__ = [
     "DistanceFields",
@@ -32,4 +38,6 @@ __all__ = [
     "strel_non_flat_sphere",
     "create_maxima_image",
     "local_maxima_3d",
+    "compute_tubular_direction",
+    "find_pseudo_distance_maxima",
 ]
