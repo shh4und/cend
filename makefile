@@ -13,7 +13,6 @@ GOLD_DIR      := ./data/GoldStandardReconstructions
 RESULTS_DIR   := ./results_swc
 SCORES_DIR    := ./scores
 SCORES_FN	  := scores.csv
-SCORES_FILE   := $(SCORES_DIR)/$(SCORES_FN)
 
 # --- Dataset Parameters ---
 N_IMAGES      := 9
@@ -21,7 +20,8 @@ INDICES       := $(shell seq 1 $(N_IMAGES))
 
 # --- CSV Header ---
 # The order of columns here must match the extraction order below.
-CSV_HEADER    := "ImageID,DiademScore,SourceImage,FilterType,SigMin,SigMax,SigStep,NeuronThreshold,PruningThreshold,GreyStrElSize,GreyStrElWeight"
+# SourceFile is now the last column to accommodate long filenames
+CSV_HEADER    := "ImageID,DiademScore,FilterType,SigMin,SigMax,SigStep,NeuronThreshold,PruningThreshold,GreyStrElSize,GreyStrElWeight,SourceFile"
 
 # --- Main Targets ---
 
@@ -35,22 +35,30 @@ all: evaluate
 evaluate:
 	@echo "--- Starting Evaluation of Reconstructions ---"
 	@mkdir -p $(SCORES_DIR)
-	@if [ ! -f "$(SCORES_FILE)" ]; then \
-		echo "$(CSV_HEADER)" > "$(SCORES_FILE)"; \
-	fi
 	
-	@echo "Evaluating $(N_IMAGES) images..."
-	@for i in $(INDICES); do \
+	@# Find the next available version number for scores file
+	@NEXT_NUM=1; \
+	while [ -f "$(SCORES_DIR)/scores$$(printf "%02d" $$NEXT_NUM).csv" ]; do \
+		NEXT_NUM=$$((NEXT_NUM + 1)); \
+	done; \
+	SCORES_FILE="$(SCORES_DIR)/scores$$(printf "%02d" $$NEXT_NUM).csv"; \
+	SCORES_SUFFIX=$$(printf "%02d" $$NEXT_NUM); \
+	echo "Creating new scores file: $$SCORES_FILE"; \
+	echo "Using reconstruction suffix: $$SCORES_SUFFIX"; \
+	echo $(CSV_HEADER) > "$$SCORES_FILE"; \
+	\
+	echo "Evaluating $(N_IMAGES) images..."; \
+	for i in $(INDICES); do \
 		GOLD_SWC="$(GOLD_DIR)/OP_$${i}.swc"; \
-		TEST_SWC="$(RESULTS_DIR)/OP_$${i}_reconstruction.swc"; \
-		META_FILE="$(RESULTS_DIR)/OP_$${i}_reconstruction.meta"; \
+		TEST_SWC="$(RESULTS_DIR)/OP_$${i}_reconstruction$${SCORES_SUFFIX}.swc"; \
+		META_FILE="$(RESULTS_DIR)/OP_$${i}_reconstruction$${SCORES_SUFFIX}.meta"; \
 		IMAGE_ID="OP_$${i}"; \
 		\
 		if [ -f "$$TEST_SWC" ]; then \
 			SCORE=$$(java -jar $(DIADEM_JAR) -G "$$GOLD_SWC" -T "$$TEST_SWC" -D 5 | grep 'Score:' | awk '{print $$2}' | tr ',' '.' || echo "ERROR"); \
 			\
 			if [ -f "$$META_FILE" ]; then \
-				SOURCE_IMG=$$(grep 'source_image:' "$$META_FILE" | awk '{print $$2}'); \
+				SOURCE_FILE=$$(grep 'source_file:' "$$META_FILE" | cut -d' ' -f2-); \
 				FILTER_TYPE=$$(grep 'filter_type:' "$$META_FILE" | awk '{print $$2}'); \
 				SIG_MIN=$$(grep 'sig_min:' "$$META_FILE" | awk '{print $$2}'); \
 				SIG_MAX=$$(grep 'sig_max:' "$$META_FILE" | awk '{print $$2}'); \
@@ -60,26 +68,26 @@ evaluate:
 				GREY_SE_SIZE=$$(grep 'grey_morpho_size:' "$$META_FILE" | awk '{print $$2}'); \
 				GREY_SE_WEIGHT=$$(grep 'grey_morpho_weight:' "$$META_FILE" | awk '{print $$2}'); \
 				\
-				CSV_LINE="$$IMAGE_ID,$$SCORE,$$SOURCE_IMG,$$FILTER_TYPE,$$SIG_MIN,$$SIG_MAX,$$SIG_STEP,$$NEURON_THRESH,$$PRUNING_THRESH,$$GREY_SE_SIZE,$$GREY_SE_WEIGHT"; \
+				CSV_LINE="$$IMAGE_ID,$$SCORE,$$FILTER_TYPE,$$SIG_MIN,$$SIG_MAX,$$SIG_STEP,$$NEURON_THRESH,$$PRUNING_THRESH,$$GREY_SE_SIZE,$$GREY_SE_WEIGHT,$$SOURCE_FILE"; \
 			else \
-				CSV_LINE="$$IMAGE_ID,$$SCORE,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND"; \
+				CSV_LINE="$$IMAGE_ID,$$SCORE,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND"; \
 			fi; \
 			echo "  -> $$IMAGE_ID | Score: $$SCORE"; \
 		else \
 			echo "  -> ERROR: File not found: $$TEST_SWC. Skipping."; \
-			CSV_LINE="$$IMAGE_ID,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND"; \
+			CSV_LINE="$$IMAGE_ID,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND,NOT_FOUND"; \
 		fi; \
-		echo "$$CSV_LINE" >> $(SCORES_FILE); \
-	done
-	@echo "--- Evaluation Complete ---"
-	@echo "Results saved to: $(SCORES_FILE)"
-	@echo "--- Preview of $(SCORES_FILE) ---"
-	@cat $(SCORES_FILE) | column -s, -t
+		echo "$$CSV_LINE" >> "$$SCORES_FILE"; \
+	done; \
+	echo "--- Evaluation Complete ---"; \
+	echo "Results saved to: $$SCORES_FILE"; \
+	echo "--- Preview of $$SCORES_FILE ---"; \
+	cat "$$SCORES_FILE" | column -s, -t
 
 # Target to clean up generated files.
-# Run 'make clean' to remove the scores directory and file.
+# Run 'make clean' to remove all versioned scores files.
 .PHONY: clean
 clean:
-	@echo "Cleaning up generated scores file..."
-	@rm -f $(SCORES_FILE)
+	@echo "Cleaning up generated scores files..."
+	@rm -f $(SCORES_DIR)/scores*.csv
 	@echo "Cleanup complete."

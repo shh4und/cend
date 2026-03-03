@@ -9,15 +9,12 @@ import numpy as np
 from scipy import ndimage as ndi
 from tqdm import tqdm
 
-from cend.core import grey_morphological_denoising
-
 from ..core.distance_fields import DistanceFields
-from ..core.segmentation import adaptive_mean_mask
 from ..core.skeletonization import generate_skeleton_from_seed
 from ..core.utils import create_maxima_image, strel_non_flat_sphere
 from ..io.image import load_3d_volume
 from ..structures.graph import Graph
-from .multiscale import multiscale_filtering, multiscale_on_distance
+from .multiscale import multiscale_filtering
 
 
 def process_image(args: Tuple):
@@ -36,6 +33,7 @@ def process_image(args: Tuple):
         num_points_per_branch,
         grey_morpho_size,
         grey_morpho_weight,
+        output_suffix,
     ) = args
 
     logging.info(f"Processing image {img_idx + 1}: {img_path.name}")
@@ -49,6 +47,7 @@ def process_image(args: Tuple):
     volume = grey_morphological_denoising(volume, struct_nonflat)
 
     # 3. Filtering: multi-scale tubularity on the raw volume
+    volume[volume_mask] = 0
     img_filtered = multiscale_filtering(
         volume=volume,
         sigma_range=sigma_range,
@@ -59,6 +58,7 @@ def process_image(args: Tuple):
     img_max = img_filtered.max()
     if img_max > 0:
         img_filtered = img_filtered / img_max
+    # img_filtered = img_as_ubyte(img_filtered)
     # img_filtered = img_as_ubyte(img_filtered)
 
     # 4. Segmentation: second filtering pass on a morphologically-closed response
@@ -84,6 +84,8 @@ def process_image(args: Tuple):
         seed_point=root_coord,
         dataset_number=img_idx + 1,
     )
+    gc.collect()
+
     pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 1.0)
     thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 1.0)
 
@@ -117,7 +119,7 @@ def process_image(args: Tuple):
         return None
 
     # 8. Smooth the tree and save the SWC file
-    output_filename = output_dir / f"OP_{img_idx + 1}_reconstruction.swc"
+    output_filename = output_dir / f"OP_{img_idx + 1}_reconstruction{output_suffix}.swc"
     success = g.generate_smoothed_swc(
         str(output_filename),
         pressure_field,
@@ -159,6 +161,7 @@ def _save_metadata(
     meta_path = swc_path.with_suffix(".meta")
     try:
         with open(meta_path, "w") as f:
+            f.write(f"source_file: {swc_path.name}\n")
             f.write(f"source_image: {img_path.name}\n")
             f.write(f"filter_type: {filter_type}\n")
             f.write(f"sig_min: {sigma_range[0]}\n")
@@ -224,6 +227,7 @@ def main():
         "--sigma_step",
         type=float,
         default=1.5,
+        default=1.5,
         help="Sigma step for multi-scale filtering.",
     )
     parser.add_argument(
@@ -232,7 +236,7 @@ def main():
     parser.add_argument(
         "--pruning_threshold",
         type=int,
-        default=5,
+        default=10,
         help="Maximum length (in nodes) of a branch to be pruned. Set to 0 to disable.",
     )
     parser.add_argument(
@@ -265,6 +269,12 @@ def main():
         default=0.5,
         help="Weight of grey morphological non-flat structure element",
     )
+    parser.add_argument(
+        "--output_suffix",
+        type=str,
+        default=None,
+        help="Suffix to append to output filenames (e.g., '01', '02'). If not provided, will auto-detect next available version.",
+    )
 
     args = parser.parse_args()
 
@@ -290,6 +300,17 @@ def main():
     if not image_paths or len(image_paths) != len(roots):
         logging.error("Image directories not found or number of roots does not match.")
         return
+
+    # Determine output suffix (auto-detect next version if not provided)
+    if args.output_suffix is None:
+        next_num = 1
+        while (output_dir / f"OP_1_reconstruction{next_num:02d}.swc").exists():
+            next_num += 1
+        output_suffix = f"{next_num:02d}"
+        logging.info(f"Auto-detected next version: {output_suffix}")
+    else:
+        output_suffix = args.output_suffix
+        logging.info(f"Using provided suffix: {output_suffix}")
 
     sigma_range = (args.sigma_min, args.sigma_max, args.sigma_step)
 
@@ -319,6 +340,7 @@ def main():
                 args.num_points_per_branch,
                 args.grey_morpho_size,
                 args.grey_morpho_weight,
+                output_suffix,
             )
         )
 
