@@ -7,7 +7,6 @@ from typing import Tuple
 
 import numpy as np
 from scipy import ndimage as ndi
-from skimage.util import img_as_ubyte
 from tqdm import tqdm
 
 from cend.core import grey_morphological_denoising
@@ -47,7 +46,7 @@ def process_image(args: Tuple):
     # 2. Pre-processing: Gaussian smoothing + grey morphological denoising
     struct_nonflat = strel_non_flat_sphere(grey_morpho_weight, grey_morpho_size)
     volume = ndi.gaussian_filter(volume, 1.0)
-    volume = grey_morphological_denoising(img_as_ubyte(volume), struct_nonflat)
+    volume = grey_morphological_denoising(volume, struct_nonflat)
 
     # 3. Filtering: multi-scale tubularity on the raw volume
     img_filtered = multiscale_filtering(
@@ -60,14 +59,16 @@ def process_image(args: Tuple):
     img_max = img_filtered.max()
     if img_max > 0:
         img_filtered = img_filtered / img_max
-    img_filtered = img_as_ubyte(img_filtered)
+    # img_filtered = img_as_ubyte(img_filtered)
 
     # 4. Segmentation: second filtering pass on a morphologically-closed response
-    struct_nonflat_2 = strel_non_flat_sphere(0.5, 4)
+    struct_nonflat_2 = strel_non_flat_sphere(0.85, 2)
+    img_closed = ndi.grey_erosion(input=img_filtered, structure=struct_nonflat_2)
     img_closed = ndi.grey_closing(input=img_filtered, structure=struct_nonflat_2)
+
     img_filtered_2 = multiscale_on_distance(
         volume=img_closed,
-        sigma_range=(1, 4.75, 1.5),
+        sigma_range=(1, 3.5, 1.5),
         filter_type=filter_type,
         neuron_threshold=neuron_threshold,
         dataset_number=img_idx + 1,
@@ -84,7 +85,7 @@ def process_image(args: Tuple):
         dataset_number=img_idx + 1,
     )
     pressure_field = ndi.gaussian_filter(df.pressure_field(img_mask), 1.0)
-    thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 2.0)
+    thrust_field = ndi.gaussian_filter(df.thrust_field(img_mask), 1.0)
 
     # 6. Skeletonization
     maximas_set = df.find_thrust_maxima(thrust_field, img_mask, order=maximas_min_dist)
@@ -216,13 +217,13 @@ def main():
     parser.add_argument(
         "--sigma_max",
         type=float,
-        default=2.0,
+        default=3.5,
         help="Maximum sigma for multi-scale filtering.",
     )
     parser.add_argument(
         "--sigma_step",
         type=float,
-        default=0.5,
+        default=1.5,
         help="Sigma step for multi-scale filtering.",
     )
     parser.add_argument(

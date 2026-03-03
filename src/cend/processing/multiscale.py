@@ -49,6 +49,7 @@ def _compute_multiscale(
         K = int(np.floor(np.log(sigma_max / sigma_min) / np.log(sigma_step))) + 1
         sigmas = sigma_min * sigma_step ** np.arange(K)
         sigmas = sigmas[sigmas <= sigma_max + 1e-9]
+        sigmas = np.round(a=sigmas, decimals=3)
 
     logger.info(f"OP_{dataset_number}: Starting Multiscale {label} with {filter_type}'s approach.")
     logger.info(f" params: sigma_scale: {sigmas}, neuron_thresh: {neuron_threshold}")
