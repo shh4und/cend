@@ -9,12 +9,14 @@ import numpy as np
 from scipy import ndimage as ndi
 from tqdm import tqdm
 
+from cend.core import adaptive_mean_mask, grey_morphological_denoising
+
 from ..core.distance_fields import DistanceFields
 from ..core.skeletonization import generate_skeleton_from_seed
 from ..core.utils import create_maxima_image, strel_non_flat_sphere
 from ..io.image import load_3d_volume
 from ..structures.graph import Graph
-from .multiscale import multiscale_filtering
+from .multiscale import multiscale_filtering, multiscale_on_distance
 
 
 def process_image(args: Tuple):
@@ -47,7 +49,6 @@ def process_image(args: Tuple):
     volume = grey_morphological_denoising(volume, struct_nonflat)
 
     # 3. Filtering: multi-scale tubularity on the raw volume
-    volume[volume_mask] = 0
     img_filtered = multiscale_filtering(
         volume=volume,
         sigma_range=sigma_range,
@@ -226,7 +227,6 @@ def main():
     parser.add_argument(
         "--sigma_step",
         type=float,
-        default=1.5,
         default=1.5,
         help="Sigma step for multi-scale filtering.",
     )
